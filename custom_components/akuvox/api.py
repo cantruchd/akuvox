@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import socket
 import json
+import re
 
 from homeassistant.core import HomeAssistant
 
@@ -76,14 +77,15 @@ class AkuvoxApiClient:
 
         if self._data.rtsp_ip is None:
             if self._data.host is not None and len(self._data.host) > 0:
-                if await self.async_make_servers_list_request(
-                    hass=self.hass,
-                    auth_token=self._data.auth_token,
-                    token=self._data.token,
-                    country_code=self.hass.config.country,
-                    phone_number=self._data.phone_number) is False:
-                    LOGGER.error("❌ API request for servers list failed.")
-                    return False
+                if self._data.auth_token and self._data.token:
+                    if await self.async_make_servers_list_request(
+                        hass=self.hass,
+                        auth_token=self._data.auth_token,
+                        token=self._data.token,
+                        country_code=self.hass.config.country,
+                        phone_number=self._data.phone_number) is False:
+                        LOGGER.error("❌ API request for servers list failed.")
+                        return False
             else:
                 LOGGER.error("❌ Unable to find API host address.")
                 return False
@@ -157,9 +159,9 @@ class AkuvoxApiClient:
             subdomain=subdomain,
             country_code=country_code,
             phone_number=phone_number)
-        url = f"https://{self._data.host}/{API_SEND_SMS}".replace(".subdomain", f".{subdomain}")
-        LOGGER.debug("url = %s", url)
         if await self.async_init_api():
+            url = f"https://{self._data.host}/{API_SEND_SMS}".replace(".subdomain", f".{subdomain}")
+            LOGGER.debug("url = %s", url)
             headers = {
                 "Host": self._data.host,
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -321,7 +323,7 @@ class AkuvoxApiClient:
             "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
             "x-cloud-lang": "en"
         }
-        json_data = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data)
+        json_data = await self._async_api_wrapper(method="post", url=url, headers=headers, data=data)
 
         if json_data is not None:
             LOGGER.debug("✅ User's device list retrieved successfully")
@@ -600,7 +602,7 @@ class AkuvoxApiClient:
             LOGGER.error("No phone number provided for obfuscation")
         # Mask phone number
         try:
-            num_str = str(phone_number)
+            num_str = re.sub(r'\D', '', str(phone_number))
         except Exception as error:
             LOGGER.error("Unable to get obfuscated phone number from %s: %s",
                          str(phone_number),
