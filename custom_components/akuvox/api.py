@@ -74,10 +74,9 @@ class AkuvoxApiClient:
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
-        if self._data.host is None or len(self._data.host) == 0:
-            self._data.host = "...request in process"
-            if await self.async_fetch_rest_server() is False:
-                return False
+        self._data.host = "...request in process"
+        if await self.async_fetch_rest_server() is False:
+            return False
 
         if self._data.host is None or len(self._data.host) == 0:
             LOGGER.error("❌ Unable to find API host address.")
@@ -203,34 +202,53 @@ class AkuvoxApiClient:
             return False
 
 
-        url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_SERVERS_LIST}"
-        headers = {
-            "accept": "*/*",
-            "content-type": "application/json",
-            "x-auth-token": token,
-            "api-version": "6.6",
-            "x-cloud-lang": "en",
-            "user-agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
-            "accept-language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8"
-        }
         obfuscated_number = str(self.get_obfuscated_phone_number(phone_number))
-        data = json.dumps({
+        request_body = {
             "auth_token": auth_token,
             "passwd": auth_token,
             "token": token,
             "user": obfuscated_number,
-        })
-        LOGGER.debug("📡 Requesting server list...")
-        json_data = await self._async_api_wrapper(
-            method="post",
-            url=url,
-            headers=headers,
-            data=data,
-        )
-        if json_data is not None:
-            LOGGER.debug("✅ Server list retrieved successfully")
-            self._data.parse_sms_login_response(json_data) # type: ignore
-            return True
+        }
+        data = json.dumps(request_body)
+
+        host_base = self._data.host or f"{self._data.subdomain}.akuvox.com"
+        servers_list_urls = [
+            f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_SERVERS_LIST}",
+            f"https://{REST_SERVER_ADDR}/{API_SERVERS_LIST}",
+            f"https://{host_base}:{REST_SERVER_PORT}/{API_SERVERS_LIST}",
+            f"https://{host_base}/{API_SERVERS_LIST}",
+        ]
+
+        for url in servers_list_urls:
+            headers = {
+                "accept": "*/*",
+                "content-type": "application/json",
+                "x-auth-token": token,
+                "api-version": "6.6",
+                "x-cloud-lang": "en",
+                "user-agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
+                "accept-language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8"
+            }
+            LOGGER.debug("📡 Requesting server list from %s...", url.replace("subdomain.", f"{self._data.subdomain}."))
+            LOGGER.debug("Headers: x-auth-token=%s***, api-version=6.6",
+                         token[:5] if token and len(token) > 5 else "")
+            LOGGER.debug("Body: user=%s, auth_token=%s***, token=%s***",
+                         obfuscated_number,
+                         auth_token[:5] if auth_token and len(auth_token) > 5 else "",
+                         token[:5] if token and len(token) > 5 else "")
+            json_data = await self._async_api_wrapper(
+                method="post",
+                url=url,
+                headers=headers,
+                data=data,
+            )
+            if json_data is not None:
+                LOGGER.debug("✅ Server list retrieved successfully")
+                self._data.parse_sms_login_response(json_data) # type: ignore
+                return True
+            if self._last_error and self._last_error.get("result") == -1:
+                LOGGER.warning("Attempt to %s failed with result=-1, trying next...", url)
+                continue
 
         LOGGER.error("❌ Unable to retrieve server list. Try signing in again / check that your tokens are valid.")
         if self._last_error and self._last_error.get("result") == -1:
