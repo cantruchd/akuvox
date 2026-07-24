@@ -5,6 +5,11 @@
     "@cantruchd"
   ],
   "config_flow": true,
+  "dependencies": [
+    "button",
+    "generic",
+    "sensor"
+  ],
   "documentation": "https://github.com/cantruchd/akuvox",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
