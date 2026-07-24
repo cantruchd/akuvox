@@ -281,16 +281,21 @@ class AkuvoxApiClient:
 
     async def async_retrieve_user_data(self) -> bool:
         """Retrieve user devices and temp keys data."""
-        if await self.async_make_servers_list_request(
-            hass=self.hass,
-            auth_token=self._data.auth_token,
-            token=self._data.token,
-            country_code=self.hass.config.country,
-            phone_number=self._data.phone_number):
-            await self.async_retrieve_device_data()
-            await self.async_retrieve_temp_keys_data()
-            return True
-        return False
+        try:
+            servers_ok = await self.async_make_servers_list_request(
+                hass=self.hass,
+                auth_token=self._data.auth_token,
+                token=self._data.token,
+                country_code=self.hass.config.country,
+                phone_number=self._data.phone_number)
+            if not servers_ok:
+                LOGGER.warning("⚠️ Servers_list failed (rtsp_ip may not be available)")
+        except AkuvoxApiClientAuthenticationError:
+            LOGGER.warning("⚠️ Servers_list auth failed (rtsp_ip may not be available)")
+
+        await self.async_retrieve_device_data()
+        await self.async_retrieve_temp_keys_data()
+        return True
 
     async def async_retrieve_device_data(self) -> bool:
         """Request and parse the user's device data."""

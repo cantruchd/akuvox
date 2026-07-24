@@ -35,6 +35,32 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Create the options flow."""
         return AkuvoxOptionsFlowHandler(config_entry)
 
+    async def async_step_reauth(self, user_input=None):
+        """Reauthenticate when tokens expire."""
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        if not entry:
+            return self.async_abort(reason="reauth_failed")
+        phone_number = entry.data.get("phone_number", "")
+        country_code = entry.data.get("country_code", "")
+        subdomain = entry.data.get("subdomain", "Default")
+        if subdomain == "Default" or not subdomain:
+            subdomain = helpers.get_subdomain_from_country_code(country_code)
+        self.data = {
+            "full_phone_number": f"(+{country_code}) {phone_number}",
+            "country_code": country_code,
+            "phone_number": phone_number,
+            "subdomain": subdomain,
+        }
+        self.akuvox_api_client = AkuvoxApiClient(
+            session=async_get_clientsession(self.hass),
+            hass=self.hass,
+            entry=None)
+        request_sms_code = await self.akuvox_api_client.async_send_sms(
+            self.hass, country_code, phone_number, subdomain)
+        if request_sms_code:
+            return await self.async_step_verify_sms_code()
+        return self.async_abort(reason="sms_send_failed")
+
     async def async_step_user(self, user_input=None):
         """Step 0: User selects sign-in method."""
 
@@ -273,14 +299,18 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
                 devices_json = self.akuvox_api_client.get_devices_json()
                 self.data.update(devices_json)
+                title = self.akuvox_api_client.get_title()
+
+                # Reauth flow: update existing entry instead of creating new one
+                entry = self.hass.config_entries.async_get_entry(self.context.get("entry_id", ""))
+                if entry and self.source == config_entries.SOURCE_REAUTH:
+                    self.hass.config_entries.async_update_entry(entry, data=self.data, title=title)
+                    return self.async_abort(reason="reauth_successful")
 
                 ################################
                 ### Create integration entry ###
                 ################################
-                return self.async_create_entry(
-                    title=self.akuvox_api_client.get_title(),
-                    data=self.data
-                )
+                return self.async_create_entry(title=title, data=self.data)
 
             user_input = None
             return self.async_show_form(
