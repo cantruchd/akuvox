@@ -23,6 +23,9 @@ async def async_setup_entry(hass, entry, async_add_devices):
 
     store = storage.Store(hass, 1, DATA_STORAGE_KEY)
     device_data: dict = await store.async_load() # type: ignore
+    if not device_data or "door_relay_data" not in device_data:
+        LOGGER.error("No door relay data found")
+        return
     door_relay_data = device_data["door_relay_data"]
 
     entities = []
