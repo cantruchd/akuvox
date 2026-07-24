@@ -127,7 +127,7 @@ class AkuvoxData:
                         self.camera_data.append(camera_dict)
 
                     # Door Relay
-                    if "relay" in dev_data:
+                    if "relay" in dev_data and len(dev_data["relay"]) > 0:
                         for relay in dev_data["relay"]:
                             relay_id = relay["relay_id"]
                             door_name = relay["door_name"].strip()
@@ -137,6 +137,13 @@ class AkuvoxData:
                                 "relay_id": relay_id,
                                 "mac": mac
                             })
+                    else:
+                        self.door_relay_data.append({
+                            "name": name,
+                            "door_name": "Open",
+                            "relay_id": "0",
+                            "mac": mac
+                        })
 
         # Log parsed entities
         if len(self.camera_data) > 0:

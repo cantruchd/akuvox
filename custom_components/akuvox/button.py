@@ -1,4 +1,6 @@
 """Button platform for akuvox."""
+import asyncio
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
@@ -13,6 +15,7 @@ from .const import (
     DATA_STORAGE_KEY
 )
 from .entity import AkuvoxEntity
+
 
 async def async_setup_entry(hass, entry, async_add_devices):
     """Set up the door relay platform."""
@@ -29,6 +32,8 @@ async def async_setup_entry(hass, entry, async_add_devices):
     door_relay_data = device_data["door_relay_data"]
 
     entities = []
+    all_doors_data = []
+
     for door_relay in door_relay_data:
         name = door_relay["name"]
         mac = door_relay["mac"]
@@ -44,6 +49,15 @@ async def async_setup_entry(hass, entry, async_add_devices):
                 data=data,
             )
         )
+        all_doors_data.append((name, data))
+
+    entities.append(
+        AkuvoxOpenAllEntity(
+            client=client,
+            entry=entry,
+            doors_data=all_doors_data,
+        )
+    )
 
     async_add_devices(entities)
 
@@ -90,12 +104,57 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
             manufacturer=NAME,
         )
 
-    def press(self) -> None:
+    async def async_press(self) -> None:
         """Trigger the door relay."""
-        self._client.make_opendoor_request(
+        await self._client.async_make_opendoor_request(
             name=self._name,
             host=self._host,
             token=self._token,
             data=self._data
         )
+
+
+class AkuvoxOpenAllEntity(ButtonEntity, AkuvoxEntity):
+    """Button to open all doors concurrently."""
+
+    _client: AkuvoxApiClient
+    _doors_data: list = []
+
+    def __init__(
+        self,
+        client: AkuvoxApiClient,
+        entry,
+        doors_data: list,
+    ) -> None:
+        """Initialize."""
+        super(ButtonEntity, self).__init__(client=client, entry=entry)
+        AkuvoxEntity.__init__(self=self, client=client, entry=entry)
+        self._client = client
+        self._host = self.get_saved_value("host")
+        self._token = self.get_saved_value("token")
+        self._doors_data = doors_data
+
+        self._attr_unique_id = "open_all_doors"
+        self._attr_name = "Open All Doors"
+
+        LOGGER.debug("Adding Akuvox open all doors button")
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "open_all_doors")},  # type: ignore
+            name="All Doors",
+            model=VERSION,
+            manufacturer=NAME,
+        )
+
+    async def async_press(self) -> None:
+        """Open all doors concurrently."""
+        tasks = [
+            self._client.async_make_opendoor_request(
+                name=name,
+                host=self._host,
+                token=self._token,
+                data=data,
+            )
+            for name, data in self._doors_data
+        ]
+        await asyncio.gather(*tasks)
 

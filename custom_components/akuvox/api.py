@@ -335,8 +335,8 @@ class AkuvoxApiClient:
         LOGGER.error("❌ Unable to retrieve user's device list.")
         return None
 
-    def make_opendoor_request(self, name: str, host: str, token: str, data: str):
-        """Request the user's configuration data."""
+    async def async_make_opendoor_request(self, name: str, host: str, token: str, data: str):
+        """Request to open door via REST API."""
         LOGGER.debug("📡 Sending request to open door '%s'...", name)
         LOGGER.debug("Request data = %s", str(data))
         url = f"https://{host}/{API_OPENDOOR}?token={token}"
@@ -346,21 +346,20 @@ class AkuvoxApiClient:
             "X-AUTH-TOKEN": token,
             "api-version": OPENDOOR_API_VERSION,
             "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
             "Accept": "*/*",
             "User-Agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
             "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
-            "Content-Length": "24",
             "x-cloud-lang": "en",
         }
-        response = self.post_request(url=url, headers=headers, data=data)
-        json_data = self.process_response(response, url)
-        if json_data is not None:
-            LOGGER.debug("✅ Door open request sent successfully.")
-            return json_data
-
-        LOGGER.error("❌ Request to open door failed.")
-        return None
+        try:
+            response = await self.hass.async_add_executor_job(self.post_request, url, headers, data, 10)
+            json_data = self.process_response(response, url)
+            if json_data is not None:
+                LOGGER.debug("✅ Door open request sent successfully.")
+                return json_data
+        except Exception as err:
+            LOGGER.error("❌ Request to open door failed: %s", err)
+            return None
 
     async def async_retrieve_temp_keys_data(self) -> bool:
         """Request and parse the user's temporary keys."""
@@ -556,7 +555,7 @@ class AkuvoxApiClient:
             if response.status == 200:
                 # Assuming the response is valid JSON, parse it
                 try:
-                    json_data = response.json()
+                    json_data = await response.json()
                     return json_data
                 except Exception as error:
                     LOGGER.warning(
