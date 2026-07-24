@@ -202,24 +202,16 @@ class AkuvoxApiClient:
             return False
 
 
+        # Build progressive request bodies (try removing passwd)
         obfuscated_number = str(self.get_obfuscated_phone_number(phone_number))
-        request_body = {
-            "auth_token": auth_token,
-            "passwd": auth_token,
-            "token": token,
-            "user": obfuscated_number,
-        }
-        data = json.dumps(request_body)
-
-        host_base = self._data.host or f"{self._data.subdomain}.akuvox.com"
-        servers_list_urls = [
-            f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_SERVERS_LIST}",
-            f"https://{REST_SERVER_ADDR}/{API_SERVERS_LIST}",
-            f"https://{host_base}:{REST_SERVER_PORT}/{API_SERVERS_LIST}",
-            f"https://{host_base}/{API_SERVERS_LIST}",
+        request_bodies = [
+            {"auth_token": auth_token, "token": token, "user": obfuscated_number},         # no passwd
+            {"auth_token": auth_token, "passwd": auth_token, "token": token, "user": obfuscated_number},  # original
         ]
 
-        for url in servers_list_urls:
+        # Try each body against the primary gate URL
+        for body in request_bodies:
+            data = json.dumps(body)
             headers = {
                 "accept": "*/*",
                 "content-type": "application/json",
@@ -229,13 +221,11 @@ class AkuvoxApiClient:
                 "user-agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
                 "accept-language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8"
             }
+            url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_SERVERS_LIST}"
             LOGGER.debug("📡 Requesting server list from %s...", url.replace("subdomain.", f"{self._data.subdomain}."))
-            LOGGER.debug("Headers: x-auth-token=%s***, api-version=6.6",
-                         token[:5] if token and len(token) > 5 else "")
-            LOGGER.debug("Body: user=%s, auth_token=%s***, token=%s***",
-                         obfuscated_number,
-                         auth_token[:5] if auth_token and len(auth_token) > 5 else "",
-                         token[:5] if token and len(token) > 5 else "")
+            LOGGER.debug("Headers: x-auth-token=%s***, api-version=6.6, body=%s",
+                         token[:5] if token and len(token) > 5 else "",
+                         json.dumps({k: (v[:5]+"***" if k != "user" and len(v) > 5 else v) for k, v in body.items()}))
             json_data = await self._async_api_wrapper(
                 method="post",
                 url=url,
@@ -246,9 +236,6 @@ class AkuvoxApiClient:
                 LOGGER.debug("✅ Server list retrieved successfully")
                 self._data.parse_sms_login_response(json_data) # type: ignore
                 return True
-            if self._last_error and self._last_error.get("result") == -1:
-                LOGGER.warning("Attempt to %s failed with result=-1, trying next...", url)
-                continue
 
         LOGGER.error("❌ Unable to retrieve server list. Try signing in again / check that your tokens are valid.")
         if self._last_error and self._last_error.get("result") == -1:
