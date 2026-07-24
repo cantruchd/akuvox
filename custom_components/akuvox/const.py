@@ -471,6 +471,9 @@ API_APP_HOST = "subdomain.akuvox.com/web-server/v3/app/"
 API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
 API_GET_PERSONAL_DOOR_LOG = "log/getDoorLog?row=1"
 
+API_V4_HOST = "subdomain.akuvox.com/v4/smartplus/"
+API_V4_GET_PERSONAL_DOOR_LOG = "single/log/master/getDoorLog?row=1"
+
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
 
 DATA_STORAGE_KEY = "akuvox_data_storage_key"

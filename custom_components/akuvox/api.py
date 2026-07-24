@@ -31,7 +31,9 @@ from .const import (
     API_OPENDOOR,
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
-    API_GET_PERSONAL_DOOR_LOG
+    API_GET_PERSONAL_DOOR_LOG,
+    API_V4_HOST,
+    API_V4_GET_PERSONAL_DOOR_LOG
 )
 
 
@@ -417,9 +419,9 @@ class AkuvoxApiClient:
 
     async def async_get_personal_door_log(self):
         """Request the user's personal door log data."""
-        # LOGGER.debug("📡 Retrieving list of user's personal door log...")
-        host = self.get_activities_host()
-        url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}"
+        app_type = self._data.app_type or "single"
+        path = API_V4_GET_PERSONAL_DOOR_LOG.replace("single/", f"{app_type}/")
+        url = f"https://{API_V4_HOST}{path}"
         data = {}
         headers = {
             "x-cloud-version": "6.4",
@@ -437,22 +439,12 @@ class AkuvoxApiClient:
         json_data: list = await self._async_api_wrapper(method="get",
                                                         url=url,
                                                         headers=headers,
-                                                        data=data) # type: ignore
-
-        # Response empty, try changing app type "single" <--> "community"
-        if json_data is not None and len(json_data) == 0:
-            self.switch_activities_host()
-            host = self.get_activities_host()
-            url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}"
-            json_data = await self._async_api_wrapper(method="get",
-                                                      url=url,
-                                                      headers=headers,
-                                                      data=data) # type: ignore
+                                                        data=data)
 
         if json_data is not None and len(json_data) > 0:
             return json_data
 
-        LOGGER.error("❌ Unable to retrieve user's personal door log")
+        LOGGER.debug("No door log entries found")
         return None
 
     ###################
