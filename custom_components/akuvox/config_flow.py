@@ -33,7 +33,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
         """Create the options flow."""
-        return AkuvoxOptionsFlowHandler(config_entry)
+        return AkuvoxOptionsFlowHandler()
 
     async def async_step_reauth(self, user_input=None):
         """Reauthenticate when tokens expire."""
@@ -413,10 +413,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Akuvox integration."""
 
     akuvox_api_client: AkuvoxApiClient = None  # type: ignore
-
-    def __init__(self, config_entry: config_entries.ConfigEntry):
-        """Initialize options flow."""
-        super().__init__(config_entry)
 
     async def async_step_init(self, user_input=None):
         """Initialize the options flow."""
