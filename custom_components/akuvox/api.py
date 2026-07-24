@@ -54,6 +54,7 @@ class AkuvoxApiClient:
     _data: AkuvoxData = None # type: ignore
     hass: HomeAssistant
     door_log_poller: DoorLogPoller
+    _last_error: dict | None = None
 
     def __init__(
         self,
@@ -64,6 +65,7 @@ class AkuvoxApiClient:
         """Akuvox API Client."""
         self._session = session
         self.hass = hass
+        self._last_error = None
         if entry:
             LOGGER.debug("▶️ Initializing AkuvoxData from API client init")
             self._data = AkuvoxData(
@@ -77,23 +79,9 @@ class AkuvoxApiClient:
             if await self.async_fetch_rest_server() is False:
                 return False
 
-        if self._data.rtsp_ip is None:
-            if self._data.host is not None and len(self._data.host) > 0:
-                if self._data.auth_token and self._data.token:
-                    if await self.async_make_servers_list_request(
-                        hass=self.hass,
-                        auth_token=self._data.auth_token,
-                        token=self._data.token,
-                        country_code=self.hass.config.country,
-                        phone_number=self._data.phone_number) is False:
-                        LOGGER.error("❌ API request for servers list failed.")
-                        return False
-            else:
-                LOGGER.error("❌ Unable to find API host address.")
-                return False
-
-        # Begin polling personal door log
-        await self.async_start_polling()
+        if self._data.host is None or len(self._data.host) == 0:
+            LOGGER.error("❌ Unable to find API host address.")
+            return False
 
         return True
 
@@ -244,7 +232,10 @@ class AkuvoxApiClient:
             self._data.parse_sms_login_response(json_data) # type: ignore
             return True
 
-        LOGGER.error("❌ Unable to retrieve server list. Try sigining in again / check that your tokens are valid.")
+        LOGGER.error("❌ Unable to retrieve server list. Try signing in again / check that your tokens are valid.")
+        if self._last_error and self._last_error.get("result") == -1:
+            raise AkuvoxApiClientAuthenticationError(
+                self._last_error.get("message", "Invalid or expired tokens"))
         return False
 
     async def async_sms_sign_in(self, phone_number, country_code, sms_code) -> bool:
@@ -503,16 +494,21 @@ class AkuvoxApiClient:
 
     def process_response(self, response, url):
         """Process response and return dict with data."""
+        self._last_error = None
         if response.status_code == 200:
             # Assuming the response is valid JSON, parse it
             try:
                 json_data = response.json()
 
                 # Standard requests
-                if "result" in json_data and json_data["result"] == 0:
-                    if "datas" in json_data:
-                        return json_data["datas"]
-                    return json_data
+                if "result" in json_data:
+                    if json_data["result"] == 0:
+                        if "datas" in json_data:
+                            return json_data["datas"]
+                        return json_data
+                    self._last_error = json_data
+                    LOGGER.warning("🤨 Response: %s", str(json_data))
+                    return None
 
                 # Temp key requests
                 if "code" in json_data:

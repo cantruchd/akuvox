@@ -53,6 +53,7 @@ class AkuvoxDataUpdateCoordinator(DataUpdateCoordinator):
                     LOGGER.debug("Saving user's data to local storage")
                     store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
                     await store.async_save(data)
+                await self.client.async_start_polling()
 
         except AkuvoxApiClientAuthenticationError as exception:
             raise ConfigEntryAuthFailed(exception) from exception
