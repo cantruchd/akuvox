@@ -38,6 +38,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         LOGGER.warning("[SETUP] phone_number=%s", entry.data["phone_number"])
     if "host" in entry.data:
         LOGGER.warning("[SETUP] host=%s", entry.data["host"])
+    if "subdomain" in entry.data:
+        LOGGER.warning("[SETUP] subdomain=%s", entry.data["subdomain"])
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator = AkuvoxDataUpdateCoordinator(
         hass=hass,
