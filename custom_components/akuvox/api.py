@@ -122,7 +122,7 @@ class AkuvoxApiClient:
     ####################
 
     def _log_api(self, fn: str, token: str, url: str):
-        LOGGER.warning("[API] %s | token=%s | url=%s", fn, token, url)
+        LOGGER.debug("[API] %s | token=%s | url=%s", fn, token, url)
 
     async def async_fetch_rest_server(self):
         """Retrieve the Akuvox REST server addresses and data."""
