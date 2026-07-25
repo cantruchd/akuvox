@@ -62,11 +62,12 @@ class AkuvoxCameraEntity(GenericCamera):
                 CONF_NAME: name,
                 "stream_source": rtsp_url,
                 "limit_refetch_to_url_change": True,
-                "framerate": 2,
                 "content_type": "",
                 CONF_VERIFY_SSL: False,
-                "rtsp_transport": "udp",
-                "advanced": {}
+                "advanced": {
+                    "framerate": 2,
+                    "rtsp_transport": "udp",
+                }
             },
             identifier=name,
             title=name,
