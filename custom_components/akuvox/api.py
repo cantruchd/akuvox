@@ -289,9 +289,11 @@ class AkuvoxApiClient:
                 country_code=self.hass.config.country,
                 phone_number=self._data.phone_number)
             if not servers_ok:
-                LOGGER.warning("⚠️ Servers_list failed (rtsp_ip may not be available)")
+                LOGGER.warning("⚠️ Servers_list failed (skipping to device data fetch)")
         except AkuvoxApiClientAuthenticationError:
-            LOGGER.warning("⚠️ Servers_list auth failed (rtsp_ip may not be available)")
+            LOGGER.warning("⚠️ Servers_list auth failed (skipping to device data fetch)")
+        except Exception as e:
+            LOGGER.warning("⚠️ Servers_list request error: %s (skipping)", e)
 
         await self.async_retrieve_device_data()
         await self.async_retrieve_temp_keys_data()
