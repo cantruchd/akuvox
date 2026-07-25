@@ -337,11 +337,12 @@ class AkuvoxApiClient:
 
     async def async_make_opendoor_request(self, name: str, host: str, token: str, data: str):
         """Request to open door via REST API."""
-        LOGGER.debug("📡 Sending request to open door '%s'...", name)
-        LOGGER.debug("Request data = %s", str(data))
-        url = f"https://{host}/{API_OPENDOOR}?token={token}"
+        # Force use rest server host for opendoor to avoid gate server issues
+        rest_host = "rest.scloud.akuvox.com:8443"
+        url = f"https://{rest_host}/{API_OPENDOOR}?token={token}"
+        LOGGER.warning("📡 Opening door '%s' via %s data=%s", name, url, data)
         headers = {
-            "Host": host,
+            "Host": rest_host,
             "Content-Type": "application/x-www-form-urlencoded",
             "X-AUTH-TOKEN": token,
             "api-version": OPENDOOR_API_VERSION,
@@ -355,11 +356,12 @@ class AkuvoxApiClient:
             response = await self.hass.async_add_executor_job(self.post_request, url, headers, data, 10)
             json_data = self.process_response(response, url)
             if json_data is not None:
-                LOGGER.debug("✅ Door open request sent successfully.")
+                LOGGER.warning("✅ Door '%s' opened successfully", name)
                 return json_data
+            LOGGER.error("❌ Door '%s' failed (API returned error: %s)", name, response.text)
         except Exception as err:
-            LOGGER.error("❌ Request to open door failed: %s", err)
-            return None
+            LOGGER.error("❌ Door '%s' request error: %s", name, err)
+        return None
 
     async def async_retrieve_temp_keys_data(self) -> bool:
         """Request and parse the user's temporary keys."""
