@@ -27,6 +27,17 @@ PLATFORMS: list[Platform] = [
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up this integration using UI."""
+    LOGGER.warning("[SETUP] Config entry data keys: %s", list(entry.data.keys()))
+    if "token" in entry.data:
+        t = entry.data["token"]
+        LOGGER.warning("[SETUP] token=%s***%s (len=%s)", t[:5], t[-4:], len(t))
+    if "auth_token" in entry.data:
+        a = entry.data["auth_token"]
+        LOGGER.warning("[SETUP] auth_token=%s***%s (len=%s)", a[:5], a[-4:], len(a))
+    if "phone_number" in entry.data:
+        LOGGER.warning("[SETUP] phone_number=%s", entry.data["phone_number"])
+    if "host" in entry.data:
+        LOGGER.warning("[SETUP] host=%s", entry.data["host"])
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator = AkuvoxDataUpdateCoordinator(
         hass=hass,

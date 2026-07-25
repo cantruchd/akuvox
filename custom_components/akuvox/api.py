@@ -121,12 +121,17 @@ class AkuvoxApiClient:
     # API Call Methods #
     ####################
 
+    def _log_api(self, fn: str, token: str, url: str):
+        LOGGER.warning("[API] %s | token=%s | url=%s", fn, token, url)
+
     async def async_fetch_rest_server(self):
         """Retrieve the Akuvox REST server addresses and data."""
         LOGGER.debug("📡 Fetching REST server data...")
+        url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_REST_SERVER_DATA}"
+        self._log_api("async_fetch_rest_server", "", url)
         json_data = await self._async_api_wrapper(
             method="get",
-            url=f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_REST_SERVER_DATA}",
+            url=url,
             data=None,
             headers={
                 'api-version': REST_SERVER_API_VERSION
@@ -184,13 +189,14 @@ class AkuvoxApiClient:
         return False
 
     async def async_make_servers_list_request(self,
-                                              hass: HomeAssistant,
-                                              auth_token: str,
-                                              token: str,
-                                              country_code,
-                                              phone_number: str,
-                                              subdomain: str = "") -> bool:
+                                               hass: HomeAssistant,
+                                               auth_token: str,
+                                               token: str,
+                                               country_code,
+                                               phone_number: str,
+                                               subdomain: str = "") -> bool:
         """Request server list data."""
+        self._log_api("async_make_servers_list_request", token, f"gate.{subdomain}.akuvox.com:8600/servers_list")
         self.init_api_with_data(
             hass=hass,
             subdomain=subdomain,
@@ -281,6 +287,7 @@ class AkuvoxApiClient:
 
     async def async_retrieve_user_data(self) -> bool:
         """Retrieve user devices and temp keys data."""
+        self._log_api("async_retrieve_user_data", self._data.token, "")
         try:
             servers_ok = await self.async_make_servers_list_request(
                 hass=self.hass,
@@ -309,14 +316,16 @@ class AkuvoxApiClient:
 
     async def async_retrieve_user_data_with_tokens(self, auth_token, token) -> bool:
         """Retrieve user devices and temp keys data with an alternate token string."""
+        self._log_api("async_retrieve_user_data_with_tokens", token, "")
         self._data.auth_token = auth_token
         self._data.token = token
         return await self.async_retrieve_user_data()
 
     async def async_user_conf(self):
         """Request the user's configuration data."""
-        LOGGER.debug("📡 Retrieving list of user's devices...")
         url = f"https://{self._data.host}/{API_USERCONF}?token={self._data.token}"
+        self._log_api("async_user_conf", self._data.token, url)
+        LOGGER.debug("📡 Retrieving list of user's devices...")
         data = {}
         headers = {
             "Host": self._data.host,
@@ -342,6 +351,7 @@ class AkuvoxApiClient:
         # Force use rest server host for opendoor to avoid gate server issues
         rest_host = "rest.scloud.akuvox.com:8443"
         url = f"https://{rest_host}/{API_OPENDOOR}?token={token}"
+        self._log_api("async_make_opendoor_request", token, url)
         LOGGER.warning("📡 Opening door '%s' via %s data=%s", name, url, data)
         headers = {
             "Host": rest_host,
@@ -375,9 +385,11 @@ class AkuvoxApiClient:
 
     async def async_get_temp_key_list(self):
         """Request the user's configuration data."""
-        LOGGER.debug("📡 Retrieving list of user's temporary keys...")
         host = self.get_activities_host()
-        subdomain = self._data.subdomain # await self._data.async_get_stored_data_for_key("subdomain")
+        url = f"https://{host}/{API_GET_PERSONAL_TEMP_KEY_LIST}"
+        self._log_api("async_get_temp_key_list", self._data.token, url)
+        LOGGER.debug("📡 Retrieving list of user's temporary keys...")
+        subdomain = self._data.subdomain
         url = f"https://{host}/{API_GET_PERSONAL_TEMP_KEY_LIST}"
         data = {}
         headers = {
@@ -426,6 +438,7 @@ class AkuvoxApiClient:
         app_type = self._data.app_type or "single"
         path = API_V4_GET_PERSONAL_DOOR_LOG.replace("single/", f"{app_type}/")
         url = f"https://{API_V4_HOST}{path}"
+        self._log_api("async_get_personal_door_log", self._data.token, url)
         data = {}
         headers = {
             "x-cloud-version": "6.4",
