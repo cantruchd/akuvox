@@ -65,7 +65,8 @@ class AkuvoxCameraEntity(GenericCamera):
                 "framerate": 2,
                 "content_type": "",
                 CONF_VERIFY_SSL: False,
-                "rtsp_transport": "udp"
+                "rtsp_transport": "udp",
+                "advanced": {}
             },
             identifier=name,
             title=name,
