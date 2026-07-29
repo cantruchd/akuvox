@@ -159,7 +159,7 @@ class AkuvoxApiClient:
             method="get",
             url=url.replace("subdomain.", f"{self._data.subdomain}."),
             data=None,
-            headers={'api-version': REST_SERVER_API_VERSION}
+            headers={}
         )
         if json_data is not None and "vrtsp_server" in json_data:
             ip = json_data["vrtsp_server"].split(':')[0]
