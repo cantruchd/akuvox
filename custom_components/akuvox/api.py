@@ -196,6 +196,8 @@ class AkuvoxApiClient:
                                                phone_number: str,
                                                subdomain: str = "") -> bool:
         """Request server list data."""
+        if not auth_token:
+            auth_token = token
         self._log_api("async_make_servers_list_request", token, f"gate.{subdomain}.akuvox.com:8600/servers_list")
         self.init_api_with_data(
             hass=hass,
@@ -317,7 +319,7 @@ class AkuvoxApiClient:
     async def async_retrieve_user_data_with_tokens(self, auth_token, token) -> bool:
         """Retrieve user devices and temp keys data with an alternate token string."""
         self._log_api("async_retrieve_user_data_with_tokens", token, "")
-        self._data.auth_token = auth_token
+        self._data.auth_token = auth_token or token
         self._data.token = token
         return await self.async_retrieve_user_data()
 

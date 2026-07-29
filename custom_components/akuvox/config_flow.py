@@ -201,7 +201,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             phone_number: str = user_input.get(
                 "phone_number", "").replace("-", "").replace(" ", "")
             token: str = user_input.get("token", "")
-            auth_token: str = user_input.get("auth_token", "")
+            auth_token: str = user_input.get("auth_token", token)
             subdomain: str = user_input.get("subdomain", "Default")
             subdomain = subdomain if subdomain != "Default" else helpers.get_subdomain_from_country_code(country_code)
 
@@ -389,15 +389,15 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 default=user_input.get("phone_number"),  # type: ignore
                 description="Your phone number"): str,
             vol.Required(
-                "auth_token",
-                msg=None,
-                default=user_input.get("auth_token", DEFAULT_APP_TOKEN),  # type: ignore
-                description="Your SmartPlus account's auth_token string"): str,
-            vol.Required(
                 "token",
                 msg=None,
                 default=user_input.get("token", DEFAULT_TOKEN),  # type: ignore
                 description="Your SmartPlus account's token string"): str,
+            vol.Optional(
+                "auth_token",
+                msg=None,
+                default=user_input.get("auth_token", ""),  # type: ignore
+                description="Optional. Defaults to token if empty."): str,
             vol.Optional("subdomain",
                          default="Default", # type: ignore
                          description="Manually set the regional API subdomain"):
@@ -446,11 +446,12 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                                  mode=selector.SelectSelectorMode.DROPDOWN,
                                  custom_value=False),
                                  ),
-            vol.Optional("auth_token",
-                         default=self.get_data_key_value("auth_token", False) # type: ignore
-            ): str,
             vol.Optional("token",
                          default=self.get_data_key_value("token", False) # type: ignore
+            ): str,
+            vol.Optional("auth_token",
+                         default=self.get_data_key_value("auth_token", ""), # type: ignore
+                         description="Optional. Defaults to token if empty."
             ): str,
             vol.Optional("subdomain",
                 default=current_subdomain, # type: ignore
@@ -499,7 +500,7 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
 
                 # Retrieve device data
                 await self.akuvox_api_client.async_retrieve_user_data_with_tokens(
-                    user_input["auth_token"],
+                    user_input.get("auth_token", user_input.get("token", "")),
                     user_input["token"])
                 devices_json = self.akuvox_api_client.get_devices_json()
                 if devices_json is not None and all(key in devices_json for key in (
@@ -523,16 +524,16 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
 
             data_schema = {
                 vol.Optional(
-                    "auth_token",
-                    msg=None,
-                    default=user_input.get("auth_token", ""),
-                    description="Your SmartPlus user's auth_token."
-                ): str,
-                vol.Optional(
                     "token",
                     msg=None,
                     default=user_input.get("token", ""),
                     description="Your SmartPlus user's token."
+                ): str,
+                vol.Optional(
+                    "auth_token",
+                    msg=None,
+                    default=user_input.get("auth_token", ""),
+                    description="Optional. Defaults to token if empty."
                 ): str,
                 vol.Optional("subdomain",
                     default="Default", # type: ignore

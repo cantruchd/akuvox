@@ -52,8 +52,8 @@ class AkuvoxData:
 
         self.hass = hass if hass else self.hass
         self.host = host if host else self.get_value_for_key(entry, "host", host) # type: ignore
-        self.auth_token = auth_token if auth_token else self.get_value_for_key(entry, "auth_token", self.host) # type: ignore
         self.token = token if token else self.get_value_for_key(entry, "token", self.token) # type: ignore
+        self.auth_token = auth_token if auth_token else self.get_value_for_key(entry, "auth_token", self.token) # type: ignore
         self.phone_number = phone_number if phone_number else self.get_value_for_key(entry, "phone_number", self.phone_number) # type: ignore
         self.wait_for_image_url = wait_for_image_url if wait_for_image_url is not None else bool(self.get_value_for_key(entry, "event_screenshot_options", False) == "wait") # type: ignore
 
@@ -89,6 +89,10 @@ class AkuvoxData:
                 self.auth_token = json_data["auth_token"]
             if "token" in json_data:
                 self.token = json_data["token"]
+            if not self.auth_token:
+                self.auth_token = self.token
+            if not self.token:
+                self.token = self.auth_token
             if "rtmp_server" in json_data:
                 self.rtsp_ip = json_data["rtmp_server"].split(':')[0]
 
