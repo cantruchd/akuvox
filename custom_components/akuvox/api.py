@@ -512,21 +512,18 @@ class AkuvoxApiClient:
             # Fix for accounts which use the "single" endpoint instead of "community"
             app_type_1 = "community"
             app_type_2 = "single"
-            if f"app/{app_type_1}/" in url:
-                LOGGER.warning("Request 'app/%s' API %s request timed out: %s - Retry using '%s'",
-                               app_type_1,
-                               method,
-                               url,
-                               app_type_2)
-                self._data.app_type = app_type_2
-                url = url.replace("app/"+app_type_1+"/", "app/"+app_type_2+"/")
-                return await self._async_api_wrapper(method, url, data, headers)
-            if f"app/{app_type_2}/" in url:
-                LOGGER.error("Timeout occured for 'app/%s' API %s request: %s",
-                             app_type_2,
-                             method,
-                             url)
-                self._data.app_type = app_type_1
+            for prefix in [f"app/{app_type_1}/", f"{app_type_1}/"]:
+                if prefix in url:
+                    LOGGER.warning("Request '%s' API %s request timed out: %s - Retry using '%s'",
+                                   app_type_1, method, url, app_type_2)
+                    self._data.app_type = app_type_2
+                    url = url.replace(prefix, f"{app_type_2}/")
+                    return await self._async_api_wrapper(method, url, data, headers)
+            for prefix in [f"app/{app_type_2}/", f"{app_type_2}/"]:
+                if prefix in url:
+                    LOGGER.error("Timeout occured for 'app/%s' API %s request: %s",
+                                 app_type_2, method, url)
+                    self._data.app_type = app_type_1
             raise AkuvoxApiClientCommunicationError(
                 f"Timeout error fetching information: {exception}",
             ) from exception

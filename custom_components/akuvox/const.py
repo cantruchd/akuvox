@@ -5,7 +5,7 @@ LOGGER: Logger = getLogger(__package__)
 
 NAME = "Akuvox SmartPlus"
 DOMAIN = "akuvox"
-VERSION = "1.0.31"
+VERSION = "1.0.32"
 ATTRIBUTION = "Data provided by https://ecloud.akuvox.com/"
 
 DEFAULT_COUNTRY_CODE = "+1"
@@ -471,8 +471,8 @@ API_APP_HOST = "subdomain.akuvox.com/web-server/v3/app/"
 API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
 API_GET_PERSONAL_DOOR_LOG = "log/getDoorLog?row=1"
 
-API_V4_HOST = "subdomain.akuvox.com/v4/smartplus/"
-API_V4_GET_PERSONAL_DOOR_LOG = "single/log/master/getDoorLog?row=1"
+API_V4_HOST = "backend.subdomain.akuvox.com/web-server/v4/smartplus/"
+API_V4_GET_PERSONAL_DOOR_LOG = "community/log/member/getDoorLog?row=1"
 
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
 
