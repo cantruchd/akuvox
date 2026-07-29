@@ -457,20 +457,27 @@ class AkuvoxApiClient:
 
     async def async_get_personal_door_log(self):
         """Request the user's personal door log data."""
+        import time
         app_type = self._data.app_type or "single"
+        ts = int(time.time() * 1000)
         path = API_V4_GET_PERSONAL_DOOR_LOG.replace("single/", f"{app_type}/")
-        url = f"https://{API_V4_HOST}{path}"
+        url = f"https://{API_V4_HOST}{path}&_t={ts}"
         self._log_api("async_get_personal_door_log", self._data.token, url)
         data = {}
+        subdomain = self._data.subdomain
         headers = {
             "x-cloud-version": "6.4",
             "accept": "application/json, text/plain, */*",
-            "sec-fetch-site": "same-origin",
-            "accept-language": "en-AU,en;q=0.9",
+            "sec-fetch-site": "same-site",
+            "accept-language": "en-GB,en;q=0.9",
             "sec-fetch-mode": "cors",
             "x-cloud-lang": "en",
-            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
-            "referer": f"https://{self._data.subdomain}.akuvox.com/smartplus/Activities.html?TOKEN={self._data.token}",
+            "origin": f"https://{subdomain}.akuvox.com",
+            "x-requested-with": "com.akuvox.mobile.smartplus",
+            "pragma": "no-cache",
+            "cache-control": "no-cache",
+            "user-agent": f"Mozilla/5.0 (Linux; Android 15; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/150.0.7871.181 Mobile Safari/537.36 SmartPlus/6.2",
+            "referer": f"https://{subdomain}.akuvox.com/",
             "x-auth-token": self._data.token,
             "sec-fetch-dest": "empty"
         }
