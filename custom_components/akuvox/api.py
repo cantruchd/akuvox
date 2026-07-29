@@ -82,6 +82,8 @@ class AkuvoxApiClient:
             LOGGER.error("❌ Unable to find API host address.")
             return False
 
+        await self.async_fetch_vrtsp_server()
+
         return True
 
     async def async_start_polling(self):
@@ -145,6 +147,24 @@ class AkuvoxApiClient:
         else:
             LOGGER.error("❌ Unable to fetch Akuvox server rest API data.")
         return False
+
+    async def async_fetch_vrtsp_server(self):
+        """Fetch vrtsp_server from servers_list (GET) for RTSP stream IP."""
+        if not self._data.token:
+            return
+        LOGGER.debug("📡 Fetching VRTSP server data...")
+        url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_SERVERS_LIST}?token={self._data.token}"
+        self._log_api("async_fetch_vrtsp_server", self._data.token, url)
+        json_data = await self._async_api_wrapper(
+            method="get",
+            url=url.replace("subdomain.", f"{self._data.subdomain}."),
+            data=None,
+            headers={'api-version': REST_SERVER_API_VERSION}
+        )
+        if json_data is not None and "vrtsp_server" in json_data:
+            ip = json_data["vrtsp_server"].split(':')[0]
+            self._data.rtsp_ip = ip
+            LOGGER.debug("✅ VRTSP server IP: %s", ip)
 
     async def async_send_sms(self, hass:HomeAssistant, country_code, phone_number, subdomain):
         """Request SMS code to user's device."""
