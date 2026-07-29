@@ -216,30 +216,28 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Perform login via auth_token, token and phone number
             if all(len(value) > 0 for value in (country_code, phone_number, token, auth_token)):
-                # Retrieve servers_list data.
-                login_successful = await self.akuvox_api_client.async_make_servers_list_request(
+                self.akuvox_api_client.init_api_with_data(
                     hass=self.hass,
+                    subdomain=subdomain,
                     auth_token=auth_token,
                     token=token,
                     country_code=country_code,
-                    phone_number=phone_number,
-                    subdomain=subdomain)
-                if login_successful is True:
-                    # Retrieve connected device data
-                    await self.akuvox_api_client.async_retrieve_user_data()
-                    devices_json = self.akuvox_api_client.get_devices_json()
-                    self.data.update(devices_json)
+                    phone_number=phone_number)
+                if await self.akuvox_api_client.async_init_api():
+                    login_successful = await self.akuvox_api_client.async_retrieve_user_data()
+                    if login_successful:
+                        devices_json = self.akuvox_api_client.get_devices_json()
+                        self.data.update(devices_json)
 
-                    ################################
-                    ### Create integration entry ###
-                    ################################
-                    return self.async_create_entry(
-                        title=self.akuvox_api_client.get_title(),
-                        data=self.data
-                    )
-                else:
-                    LOGGER.error("❌ Unable to retrieve user data. Check your tokens.")
+                        ################################
+                        ### Create integration entry ###
+                        ################################
+                        return self.async_create_entry(
+                            title=self.akuvox_api_client.get_title(),
+                            data=self.data
+                        )
 
+                LOGGER.error("❌ Unable to retrieve user data. Check your tokens.")
                 return self.async_show_form(
                     step_id="app_tokens_sign_in",
                     data_schema=vol.Schema(self.get_app_tokens_sign_in_schema(user_input)),
