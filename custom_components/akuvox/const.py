@@ -5,7 +5,7 @@ LOGGER: Logger = getLogger(__package__)
 
 NAME = "Akuvox SmartPlus"
 DOMAIN = "akuvox"
-VERSION = "1.0.28"
+VERSION = "1.0.29"
 ATTRIBUTION = "Data provided by https://ecloud.akuvox.com/"
 
 DEFAULT_COUNTRY_CODE = "+1"
