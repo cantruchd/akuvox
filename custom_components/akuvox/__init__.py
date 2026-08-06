@@ -10,6 +10,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.components import webhook as wb
+from aiohttp import web as aio_web
 
 from .config_flow import AkuvoxOptionsFlowHandler
 from .api import AkuvoxApiClient
@@ -82,10 +83,10 @@ async def async_akuvox_token_webhook(hass: HomeAssistant, webhook_id: str, reque
         body = {}
     token = str(body.get("token", "") or "")
     if not token:
-        return wb.json_response({"ok": False, "error": "missing token"})
+        return aio_web.json_response({"ok": False, "error": "missing token"})
     entries = hass.config_entries.async_entries(DOMAIN)
     if not entries:
-        return wb.json_response({"ok": False, "error": "no entry"})
+        return aio_web.json_response({"ok": False, "error": "no entry"})
     entry = entries[0]
     if entry.data.get("token") != token:
         hass.config_entries.async_update_entry(
@@ -94,8 +95,8 @@ async def async_akuvox_token_webhook(hass: HomeAssistant, webhook_id: str, reque
             options={**entry.options, "token": token, "auth_token": token},
         )
         LOGGER.info("[WEBHOOK] Token updated by app (len=%s)", len(token))
-        return wb.json_response({"ok": True, "updated": True})
-    return wb.json_response({"ok": True, "updated": False})
+        return aio_web.json_response({"ok": True, "updated": True})
+    return aio_web.json_response({"ok": True, "updated": False})
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
