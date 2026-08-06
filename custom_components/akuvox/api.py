@@ -5,6 +5,9 @@ import asyncio
 import socket
 import json
 import re
+import time
+from pathlib import Path
+from urllib.parse import urlparse
 
 from homeassistant.core import HomeAssistant
 
@@ -33,7 +36,9 @@ from .const import (
     API_GET_PERSONAL_TEMP_KEY_LIST,
     API_GET_PERSONAL_DOOR_LOG,
     API_V4_HOST,
-    API_V4_GET_PERSONAL_DOOR_LOG
+    API_V4_GET_PERSONAL_DOOR_LOG,
+    CAPTURE_TIME_KEY,
+    PIC_URL_KEY
 )
 
 
@@ -55,6 +60,7 @@ class AkuvoxApiClient:
     hass: HomeAssistant
     door_log_poller: DoorLogPoller
     _last_error: dict | None = None
+    _last_screenshot_time: str | None = None
 
     def __init__(
         self,
@@ -452,8 +458,108 @@ class AkuvoxApiClient:
                     # Fire HA event
                     LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
                     event_name = "akuvox_door_update"
+                    if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY]:
+                        local_pic_url = await self.async_download_door_screenshot(
+                            new_door_log[PIC_URL_KEY],
+                            new_door_log.get(CAPTURE_TIME_KEY, ""))
+                        if local_pic_url:
+                            new_door_log["LocalPicUrl"] = local_pic_url
                     self.hass.bus.async_fire(event_name, new_door_log)
+                else:
+                    # Event may have fired without screenshot (asap mode) - retry download
+                    await self.async_download_pending_screenshot(json_data)
             await asyncio.sleep(2)  # Wait for 2 seconds before calling again
+
+    async def async_download_pending_screenshot(self, json_data):
+        """Download screenshot for a recent event that fired without one."""
+        try:
+            latest_entry = json_data[0]
+        except (IndexError, TypeError):
+            return
+        capture_time = latest_entry.get(CAPTURE_TIME_KEY, "")
+        if not capture_time or not latest_entry.get(PIC_URL_KEY):
+            return
+        if capture_time == self._last_screenshot_time:
+            return
+        local_pic_url = await self.async_download_door_screenshot(
+            latest_entry[PIC_URL_KEY], capture_time)
+        if local_pic_url:
+            self._last_screenshot_time = capture_time
+            LOGGER.debug("🖼️ Screenshot downloaded for previously-fired event %s", capture_time)
+
+    async def async_download_door_screenshot(self, pic_url: str, capture_time: str) -> str | None:
+        """Download door log screenshot to www/akuvox and return local URL.
+
+        Screenshots older than 30 days are automatically deleted to avoid
+        filling up the disk.
+        """
+        www_dir = Path(self.hass.config.path("www", "akuvox"))
+        filename = self._get_screenshot_filename(capture_time, pic_url)
+        local_path = www_dir / filename
+        if local_path.exists():
+            LOGGER.debug("✅ Door screenshot already exists: %s", filename)
+            return f"/local/akuvox/{filename}"
+        try:
+            www_dir.mkdir(parents=True, exist_ok=True)
+            headers = {
+                "accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+                "user-agent": "Mozilla/5.0 (Linux; Android 15; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/150.0.7871.181 Mobile Safari/537.36 SmartPlus/6.2",
+                "x-auth-token": self._data.token,
+                "referer": f"https://{self._data.subdomain}.akuvox.com/",
+            }
+            url = pic_url
+            response = await self.hass.async_add_executor_job(self.get_request, url, headers, None, 20)
+            if response.status_code in (401, 403):
+                # Retry with token in the query string
+                separator = "&" if "?" in pic_url else "?"
+                url = f"{pic_url}{separator}token={self._data.token}"
+                response = await self.hass.async_add_executor_job(self.get_request, url, headers, None, 20)
+            if response.status_code == 200 and response.content:
+                await self.hass.async_add_executor_job(
+                    self._save_screenshot_and_cleanup, local_path, response.content)
+                LOGGER.info("🖼️ Door screenshot saved to %s", local_path)
+                return f"/local/akuvox/{filename}"
+            LOGGER.warning("❌ Unable to download door screenshot (HTTP %s): %s",
+                           response.status_code, url)
+        except Exception as error:  # pylint: disable=broad-except
+            LOGGER.error("❌ Error downloading door screenshot: %s", error)
+        return None
+
+    def _get_screenshot_filename(self, capture_time: str, pic_url: str) -> str:
+        """Build a safe filename from capture time and source URL extension."""
+        safe_time = re.sub(r"\D", "", str(capture_time))
+        extension = Path(urlparse(pic_url).path).suffix.lower()
+        if extension not in (".jpg", ".jpeg", ".png", ".webp"):
+            extension = ".jpg"
+        return f"door_{safe_time}{extension}"
+
+    def _save_screenshot_and_cleanup(self, local_path: Path, content: bytes):
+        """Write screenshot to disk and remove screenshots older than 30 days."""
+        try:
+            local_path.write_bytes(content)
+        except OSError as error:
+            LOGGER.error("❌ Unable to save door screenshot %s: %s", local_path, error)
+            return
+        self.cleanup_old_screenshots(local_path.parent)
+
+    def cleanup_old_screenshots(self, www_dir: Path):
+        """Delete door screenshots older than 30 days."""
+        cutoff = time.time() - (30 * 24 * 60 * 60)
+        removed = 0
+        try:
+            for file_path in www_dir.iterdir():
+                if not file_path.is_file():
+                    continue
+                try:
+                    if file_path.stat().st_mtime < cutoff:
+                        file_path.unlink()
+                        removed += 1
+                except OSError:
+                    continue
+        except OSError as error:
+            LOGGER.warning("🧹 Unable to scan %s for old screenshots: %s", www_dir, error)
+        if removed:
+            LOGGER.info("🧹 Deleted %s door screenshot(s) older than 30 days", removed)
 
     async def async_get_personal_door_log(self):
         """Request the user's personal door log data."""

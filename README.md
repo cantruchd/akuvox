@@ -81,7 +81,10 @@ The `Initiator` value represents the name of the individual that triggered the e
 #### 4. `trigger.event.data.PicUrl`
 The `PicUrl` value contains a URL to the camera screenshot image taken at the time of the door ring/open event.
 
-#### 5. `trigger.event.data.RelayName`
+#### 5. `trigger.event.data.LocalPicUrl`
+The `LocalPicUrl` value is added when the camera screenshot was successfully downloaded to your Home Assistant `www/akuvox/` folder (only available while it exists locally). Screenshots older than 30 days are automatically deleted. Access it in a notification with, eg: `{{ trigger.event.data.LocalPicUrl }}`.
+
+#### 6. `trigger.event.data.RelayName`
 The `RelayName` value represents the name of the door relay that was opened (useful if your door has multiple relays), eg: `Relay1`, `Relay2`, etc.
 
 ---
