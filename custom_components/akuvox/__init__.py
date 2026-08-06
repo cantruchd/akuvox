@@ -9,12 +9,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.components import webhook as wb
 
 from .config_flow import AkuvoxOptionsFlowHandler
 from .api import AkuvoxApiClient
 from .const import (
     DOMAIN,
-    LOGGER
+    LOGGER,
+    WEBHOOK_ID,
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
 
@@ -56,6 +58,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    wb.async_register(
+        hass, DOMAIN, "Akuvox token sync", WEBHOOK_ID, async_akuvox_token_webhook
+    )
 
     return True
 
@@ -65,7 +70,32 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_stop_polling(hass)
     if unloaded := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
+    wb.async_unregister(hass, WEBHOOK_ID)
     return unloaded
+
+
+async def async_akuvox_token_webhook(hass: HomeAssistant, webhook_id: str, request):
+    """Receive token pushed by the patched SmartPlus app."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    token = str(body.get("token", "") or "")
+    if not token:
+        return wb.json_response({"ok": False, "error": "missing token"})
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        return wb.json_response({"ok": False, "error": "no entry"})
+    entry = entries[0]
+    if entry.data.get("token") != token:
+        hass.config_entries.async_update_entry(
+            entry,
+            data={**entry.data, "token": token, "auth_token": token},
+            options={**entry.options, "token": token, "auth_token": token},
+        )
+        LOGGER.info("[WEBHOOK] Token updated by app (len=%s)", len(token))
+        return wb.json_response({"ok": True, "updated": True})
+    return wb.json_response({"ok": True, "updated": False})
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
