@@ -68,11 +68,9 @@ class AkuvoxData:
                 if key in entry["configured"]: # type: ignore
                     return entry["configured"][key] # type: ignore
                 return default
-            override = entry.options.get("override", False) or key == "event_screenshot_options"
-            placeholder = entry.data.get(key, None)
-            if override:
-                return entry.options.get(key, placeholder)
-            return placeholder
+            if key in entry.options:
+                return entry.options[key]
+            return entry.data.get(key, default)
         return default
 
     def parse_rest_server_response(self, json_data: dict):

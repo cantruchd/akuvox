@@ -35,10 +35,6 @@ class AkuvoxEntity(Entity):
 
     def get_saved_value(self, key: str) -> str:
         """Get the value for a given key. Options flow 1st, Config flow 2nd."""
-        should_override = self.entry.options.get("override", False) # type: ignore
-        default = ""
-        if key in self.entry.data: # type: ignore
-            default = self.entry.data[key] # type: ignore
-        if should_override is True:
-            return self.entry.options.get(key, default) # type: ignore
-        return default
+        if key in self.entry.options: # type: ignore
+            return self.entry.options[key] # type: ignore
+        return self.entry.data.get(key, "") # type: ignore

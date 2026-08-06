@@ -302,7 +302,14 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 # Reauth flow: update existing entry instead of creating new one
                 entry = self.hass.config_entries.async_get_entry(self.context.get("entry_id", ""))
                 if entry and self.source == config_entries.SOURCE_REAUTH:
-                    self.hass.config_entries.async_update_entry(entry, data=self.data, title=title)
+                    # Keep token/auth_token in options in sync so options-first
+                    # lookups don't override the newly refreshed tokens.
+                    new_options = dict(entry.options)
+                    if "token" in self.data:
+                        new_options["token"] = self.data["token"]
+                    if "auth_token" in self.data:
+                        new_options["auth_token"] = self.data["auth_token"]
+                    self.hass.config_entries.async_update_entry(entry, data=self.data, options=new_options, title=title)
                     return self.async_abort(reason="reauth_successful")
 
                 ################################
