@@ -42,6 +42,11 @@ async def async_setup_entry(hass: HomeAssistant,
         return
 
     async_add_devices(entities)
+
+    # Per-entry door log cameras - full-size screenshot for each log entry
+    manager = AkuvoxDoorLogCameraManager(hass=hass, async_add_devices=async_add_devices)
+    await manager.initialize()
+
     return True
 
 class AkuvoxCameraEntity(GenericCamera):
@@ -129,4 +134,117 @@ class AkuvoxDoorLogCamera(Camera):
         except OSError as error:
             LOGGER.debug("Unable to read door log screenshot %s: %s", file_path, error)
             return None
+
+class AkuvoxDoorLogEntryCamera(Camera):
+    """One door log entry as a camera showing the full screenshot."""
+
+    def __init__(self, hass: HomeAssistant, log_entry: dict, rank: int) -> None:
+        """Initialize one door log entry camera."""
+        super().__init__()
+        self.hass = hass
+        self._log_entry = log_entry
+        self._rank = rank
+        capture_time = log_entry.get("capture_time", "")
+        self._attr_unique_id = f"Door Log Camera {capture_time}"
+        self._attr_name = self._build_name()
+        self._attr_icon = "mdi:door"
+        self._attr_should_poll = False
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "Door Log")},  # type: ignore
+            name="Door Log",
+            model=VERSION,
+            manufacturer=NAME,
+        )
+
+    def _build_name(self) -> str:
+        """Name with zero-padded rank so HA sorts newest first."""
+        return f"Door Log Camera {self._rank:03d} · {self._log_entry.get('capture_time', '')}"
+
+    def update_data(self, log_entry: dict, rank: int):
+        """Update this camera with the latest entry data."""
+        self._log_entry = log_entry
+        self._rank = rank
+        self._attr_name = self._build_name()
+
+    def _local_path(self):
+        """Resolve the local screenshot file path for this entry."""
+        local_pic_url = self._log_entry.get("local_pic_url", "")
+        if not local_pic_url:
+            return None
+        return self.hass.config.path(local_pic_url.replace("/local/", "", 1))
+
+    @property
+    def content_type(self):
+        """Return the content type based on the screenshot file extension."""
+        file_path = self._local_path()
+        if file_path and file_path.lower().endswith(".png"):
+            return "image/png"
+        if file_path and file_path.lower().endswith(".webp"):
+            return "image/webp"
+        return "image/jpeg"
+
+    async def async_camera_image(self, width: int | None = None,
+                                 height: int | None = None):
+        """Return this entry's screenshot as image bytes."""
+        file_path = self._local_path()
+        if not file_path:
+            return None
+        return await self.hass.async_add_executor_job(self._read_image, file_path)
+
+    def _read_image(self, file_path):
+        """Read image bytes from disk."""
+        try:
+            with open(file_path, "rb") as image_file:
+                return image_file.read()
+        except OSError as error:
+            LOGGER.debug("Unable to read door log screenshot %s: %s", file_path, error)
+            return None
+
+class AkuvoxDoorLogCameraManager:
+    """Creates and keeps per-entry door log cameras in sync with storage."""
+
+    MAX_ENTRY_CAMERAS = 500
+
+    def __init__(self, hass: HomeAssistant, async_add_devices) -> None:
+        """Initialize the door log entry camera manager."""
+        self.hass = hass
+        self.async_add_devices = async_add_devices
+        self._store = storage.Store(hass, 1, DATA_STORAGE_KEY)
+        self.entities: dict = {}
+
+    async def initialize(self):
+        """Create cameras for existing entries and subscribe to updates."""
+        await self.async_sync_cameras()
+        unsub = self.hass.bus.async_listen(
+            "akuvox_door_log_updated", self._handle_door_log_updated)
+        hass_data = self.hass.data.setdefault(DOMAIN, {})
+        hass_data.setdefault("door_log_unsubs", []).append(unsub)
+
+    async def _handle_door_log_updated(self, event):
+        """Sync entry cameras when the poller detects new logs."""
+        await self.async_sync_cameras()
+
+    async def async_sync_cameras(self):
+        """Create/update entry cameras from the stored door log list."""
+        stored_data: dict = await self._store.async_load() # type: ignore
+        entries = []
+        if stored_data:
+            entries = [entry for entry in stored_data.get("door_log_entries", [])
+                       if isinstance(entry, dict)]
+        entries = entries[:self.MAX_ENTRY_CAMERAS]
+
+        new_entities = []
+        for rank, log_entry in enumerate(entries, start=1):
+            key = str(log_entry.get("capture_time", ""))
+            if not key:
+                continue
+            if key in self.entities:
+                self.entities[key].update_data(log_entry, rank)
+            else:
+                camera = AkuvoxDoorLogEntryCamera(
+                    hass=self.hass, log_entry=log_entry, rank=rank)
+                self.entities[key] = camera
+                new_entities.append(camera)
+        if new_entities:
+            self.async_add_devices(new_entities)
 
