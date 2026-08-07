@@ -62,6 +62,20 @@ async def async_setup_entry(hass, entry, async_add_devices):
 
     async_add_devices(entities)
 
+    # Per-entry door log sensors (newest 100) - one sensor per log with thumbnail
+    manager = AkuvoxDoorLogManager(
+        hass=hass, client=client, entry=entry, store=store,
+        async_add_devices=async_add_devices)
+    await manager.initialize()
+
+async def async_unload_entry(hass, entry):
+    """Unload sensor platform and remove event listeners."""
+    unsubs = hass.data[DOMAIN].get("door_log_unsubs", [])
+    for unsub in unsubs:
+        unsub()
+    hass.data[DOMAIN].pop("door_log_unsubs", None)
+    return True
+
 class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
     """Akuvox temporary door key class."""
 
@@ -197,3 +211,95 @@ class AkuvoxDoorLogSensor(SensorEntity, AkuvoxEntity):
             "latest": latest,
             "count": len(self._entries),
         }
+
+class AkuvoxDoorLogEntrySensor(SensorEntity, AkuvoxEntity):
+    """A single door log entry as a sensor with its screenshot."""
+
+    MAX_ENTRY_SENSORS = 100
+
+    def __init__(self, client: AkuvoxApiClient, entry, log_entry: dict) -> None:
+        """Initialize one door log entry sensor."""
+        super().__init__(client=client, entry=entry)
+        self._log_entry = log_entry
+        capture_time = log_entry.get("capture_time", "")
+        self._attr_unique_id = f"Door Log {capture_time}"
+        self._attr_name = f"Door Log {capture_time}"
+        self._attr_icon = "mdi:door"
+        self._attr_should_poll = False
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "Door Log")},  # type: ignore
+            name="Door Log",
+            model=VERSION,
+            manufacturer=NAME,
+        )
+
+    def update_data(self, log_entry: dict):
+        """Update this sensor with the latest entry data."""
+        self._log_entry = log_entry
+
+    @property
+    def native_value(self):
+        """Return the initiator of the log entry."""
+        return self._log_entry.get("initiator") or "?"
+
+    @property
+    def entity_picture(self):
+        """Show the log entry screenshot as the entity picture."""
+        return self._log_entry.get("local_pic_url") or self._log_entry.get("pic_url")
+
+    @property
+    def extra_state_attributes(self):
+        """Return the full log entry as attributes."""
+        attributes = dict(self._log_entry)
+        attributes.pop("ss_attempts", None)
+        return attributes
+
+class AkuvoxDoorLogManager:
+    """Creates and keeps per-entry door log sensors in sync with storage."""
+
+    def __init__(self, hass, client: AkuvoxApiClient, entry, store,
+                 async_add_devices) -> None:
+        """Initialize the door log entry sensor manager."""
+        self.hass = hass
+        self.client = client
+        self.entry = entry
+        self.store = store
+        self.async_add_devices = async_add_devices
+        self.entities: dict = {}
+
+    async def initialize(self):
+        """Create sensors for existing entries and subscribe to updates."""
+        await self.async_sync_entries()
+        unsub = self.hass.bus.async_listen(
+            "akuvox_door_log_updated", self._handle_door_log_updated)
+        hass_data = self.hass.data.setdefault(DOMAIN, {})
+        hass_data.setdefault("door_log_unsubs", []).append(unsub)
+
+    async def _handle_door_log_updated(self, event):
+        """Sync entry sensors when the poller detects new logs."""
+        await self.async_sync_entries()
+
+    async def async_sync_entries(self):
+        """Create/update entry sensors from the stored door log list."""
+        stored_data: dict = await self.store.async_load() # type: ignore
+        entries = []
+        if stored_data:
+            entries = [entry for entry in stored_data.get("door_log_entries", [])
+                       if isinstance(entry, dict)]
+        entries = entries[:AkuvoxDoorLogEntrySensor.MAX_ENTRY_SENSORS]
+
+        new_entities = []
+        for log_entry in entries:
+            key = str(log_entry.get("capture_time", ""))
+            if not key:
+                continue
+            if key in self.entities:
+                self.entities[key].update_data(log_entry)
+                self.entities[key].async_write_ha_state()
+            else:
+                sensor = AkuvoxDoorLogEntrySensor(
+                    client=self.client, entry=self.entry, log_entry=log_entry)
+                self.entities[key] = sensor
+                new_entities.append(sensor)
+        if new_entities:
+            self.async_add_devices(new_entities)
