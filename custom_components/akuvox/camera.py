@@ -214,7 +214,10 @@ class AkuvoxDoorLogCameraManager:
 
     async def initialize(self):
         """Create cameras for existing entries and subscribe to updates."""
-        await self.async_sync_cameras()
+        try:
+            await self.async_sync_cameras()
+        except Exception as error:  # pylint: disable=broad-except
+            LOGGER.error("❌ Error creating door log cameras on setup: %s", error)
         unsub = self.hass.bus.async_listen(
             "akuvox_door_log_updated", self._handle_door_log_updated)
         hass_data = self.hass.data.setdefault(DOMAIN, {})
@@ -222,7 +225,10 @@ class AkuvoxDoorLogCameraManager:
 
     async def _handle_door_log_updated(self, event):
         """Sync entry cameras when the poller detects new logs."""
-        await self.async_sync_cameras()
+        try:
+            await self.async_sync_cameras()
+        except Exception as error:  # pylint: disable=broad-except
+            LOGGER.error("❌ Error syncing door log cameras: %s", error)
 
     async def async_sync_cameras(self):
         """Create/update entry cameras from the stored door log list."""
@@ -231,6 +237,7 @@ class AkuvoxDoorLogCameraManager:
         if stored_data:
             entries = [entry for entry in stored_data.get("door_log_entries", [])
                        if isinstance(entry, dict)]
+        LOGGER.debug("📷 Door log camera sync: %s entries in storage", len(entries))
         entries = entries[:self.MAX_ENTRY_CAMERAS]
 
         new_entities = []
