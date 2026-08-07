@@ -225,13 +225,14 @@ class AkuvoxData:
         entries = [entry for entry in entries if isinstance(entry, dict)]
         existing_times = {entry.get("capture_time") for entry in entries}
         changed = False
+        new_items = []
         for door_log_json in json_data:
             if not isinstance(door_log_json, dict):
                 continue
             capture_time = door_log_json.get(CAPTURE_TIME_KEY, "")
             if not capture_time or capture_time in existing_times:
                 continue
-            entries.insert(0, {
+            new_items.append({
                 "capture_time": capture_time,
                 "location": door_log_json.get("Location", ""),
                 "initiator": door_log_json.get("Initiator", ""),
@@ -246,6 +247,8 @@ class AkuvoxData:
             existing_times.add(capture_time)
             changed = True
         if changed:
+            entries = new_items + entries
+            entries.sort(key=lambda e: str(e.get("capture_time", "")), reverse=True)
             del entries[500:]
             await self.async_set_stored_data_for_key("door_log_entries", entries)
         return changed, entries
