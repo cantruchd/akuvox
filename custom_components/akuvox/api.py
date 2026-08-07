@@ -92,10 +92,11 @@ class AkuvoxApiClient:
         return True
 
     async def async_start_polling(self):
-        """Start polling the personal door log API."""
+        """Backfill history, then start polling the personal door log API."""
         self.door_log_poller: DoorLogPoller = DoorLogPoller(
             hass=self.hass,
             poll_function=self.async_retrieve_personal_door_log)
+        await self.async_backfill_door_log_entries()
         await self.door_log_poller.async_start()
 
     async def async_stop_polling(self):
@@ -442,11 +443,8 @@ class AkuvoxApiClient:
         return None
 
     async def async_start_polling_personal_door_log(self):
-        """Backfill history, then poll the server for the latest personal door log."""
-        # Backfill older entries first so the door log list is complete
-        await self.async_backfill_door_log_entries()
-        # Make sure only 1 instance of the door log polling is running
-        self.hass.async_create_task(self.async_retrieve_personal_door_log())
+        """Start the personal door log poller (used on config reload)."""
+        await self.async_start_polling()
 
     async def async_backfill_door_log_entries(self):
         """Page through the door log API to backfill history (up to 500 entries)."""
