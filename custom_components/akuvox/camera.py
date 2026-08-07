@@ -117,8 +117,12 @@ class AkuvoxDoorLogEntryCamera(Camera):
         )
 
     def _build_name(self) -> str:
-        """Name with zero-padded rank so HA sorts newest first."""
-        return f"Door Log {self._rank:03d}"
+        """Name with zero-padded rank (newest first) + full entry info."""
+        entry = self._log_entry
+        capture_time = entry.get("capture_time") or "?"
+        location = entry.get("location") or "?"
+        initiator = entry.get("initiator") or "?"
+        return f"Door Log {self._rank:03d} | {capture_time} | {location} | {initiator}"
 
     def update_data(self, log_entry: dict, rank: int):
         """Update this camera with the latest entry data."""
