@@ -93,6 +93,7 @@ A `sensor.akuvox_door_log` entity is created on its own "Door Log" device. It ho
 - `location` — which door (eg: `Front Door`)
 - `initiator` — who triggered the event
 - `relay` / `mac` — the relay name and device MAC address
+- `building_name` / `room_num` — building and room of the door
 - `pic_url` — remote screenshot URL (may expire on Akuvox's server)
 - `local_pic_url` — locally downloaded screenshot (`/local/akuvox/...`), kept for 30 days
 

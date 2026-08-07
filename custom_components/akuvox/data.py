@@ -237,6 +237,8 @@ class AkuvoxData:
                 "initiator": door_log_json.get("Initiator", ""),
                 "relay": door_log_json.get("Relay", ""),
                 "mac": door_log_json.get("MAC", ""),
+                "building_name": door_log_json.get("BuildingName", ""),
+                "room_num": door_log_json.get("RoomNum", ""),
                 "pic_url": door_log_json.get(PIC_URL_KEY, ""),
                 "local_pic_url": "",
                 "ss_attempts": 0,

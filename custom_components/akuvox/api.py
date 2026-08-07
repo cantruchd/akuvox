@@ -612,11 +612,46 @@ class AkuvoxApiClient:
                                                         headers=headers,
                                                         data=data)
 
-        if json_data is not None and len(json_data) > 0:
-            return json_data
+        if json_data is not None:
+            json_data = self._normalize_door_log_response(json_data)
+            if json_data is not None and len(json_data) > 0:
+                return json_data
 
         LOGGER.debug("No door log entries found")
         return None
+
+    def _normalize_door_log_response(self, json_data):
+        """Normalize door log API responses to a list of entries with legacy key names.
+
+        Handles: raw list, {"list": [...]}, and dict payloads. Maps lowercase
+        ecloud-style keys (captureTime/deviceName/initiator/picUrl/...) to the
+        legacy uppercase keys used by the rest of the integration.
+        """
+        if json_data is None:
+            return None
+        if isinstance(json_data, dict) and "list" in json_data:
+            json_data = json_data["list"]
+        if not isinstance(json_data, list):
+            return json_data
+        normalized = []
+        for entry in json_data:
+            if not isinstance(entry, dict):
+                continue
+            if "CaptureTime" in entry:
+                normalized.append(entry)
+                continue
+            normalized.append({
+                "CaptureTime": entry.get("captureTime", ""),
+                "Location": entry.get("deviceName", entry.get("buildingName", "")),
+                "Initiator": entry.get("initiator", ""),
+                "CaptureType": entry.get("captureType", ""),
+                "Relay": entry.get("relayName", ""),
+                "MAC": entry.get("deviceMac", entry.get("mac", "")),
+                "PicUrl": entry.get("picUrl", ""),
+                "BuildingName": entry.get("buildingName", ""),
+                "RoomNum": entry.get("roomNum", ""),
+            })
+        return normalized
 
     ###################
     # Request Methods #
