@@ -166,7 +166,8 @@ class AkuvoxDoorLogSensor(SensorEntity, AkuvoxEntity):
         """Load the door log entries from integration storage."""
         stored_data: dict = await self._store.async_load() # type: ignore
         if stored_data:
-            self._entries = stored_data.get("door_log_entries", [])
+            entries = stored_data.get("door_log_entries", [])
+            self._entries = [entry for entry in entries if isinstance(entry, dict)]
         else:
             self._entries = []
 

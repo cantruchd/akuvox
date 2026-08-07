@@ -186,7 +186,7 @@ class AkuvoxData:
         """Parse the getDoorLog API response."""
         ret_value = None
         is_wait = await self.async_get_stored_data_for_key("wait_for_image_url")
-        if json_data is not None and len(json_data) > 0:
+        if json_data is not None and isinstance(json_data, list) and len(json_data) > 0:
             new_door_log = json_data[0]
             latest_door_log = await self.async_get_stored_data_for_key("latest_door_log")
             if latest_door_log is not None and CAPTURE_TIME_KEY in latest_door_log:
@@ -222,9 +222,12 @@ class AkuvoxData:
         entries = await self.async_get_stored_data_for_key("door_log_entries")
         if entries is None:
             entries = []
+        entries = [entry for entry in entries if isinstance(entry, dict)]
         existing_times = {entry.get("capture_time") for entry in entries}
         changed = False
         for door_log_json in json_data:
+            if not isinstance(door_log_json, dict):
+                continue
             capture_time = door_log_json.get(CAPTURE_TIME_KEY, "")
             if not capture_time or capture_time in existing_times:
                 continue

@@ -449,22 +449,25 @@ class AkuvoxApiClient:
     async def async_retrieve_personal_door_log(self) -> bool:
         """Request and parse the user's door log every 2 seconds."""
         while True:
-            # Get the latest pesonal door log
-            json_data = await self.async_get_personal_door_log()
-            if json_data is not None:
-                # Update the door log entry list + download screenshots
-                await self.async_update_door_log_data(json_data)
-                # Fire HA event
-                new_door_log = await self._data.async_parse_personal_door_log(json_data)
-                if new_door_log is not None:
-                    LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
-                    event_name = "akuvox_door_update"
-                    entries = await self._data.async_get_stored_data_for_key("door_log_entries")
-                    if (entries and str(entries[0].get("capture_time")) ==
-                            str(new_door_log.get(CAPTURE_TIME_KEY))):
-                        if entries[0].get("local_pic_url"):
-                            new_door_log["LocalPicUrl"] = entries[0]["local_pic_url"]
-                    self.hass.bus.async_fire(event_name, new_door_log)
+            try:
+                # Get the latest pesonal door log
+                json_data = await self.async_get_personal_door_log()
+                if json_data is not None:
+                    # Update the door log entry list + download screenshots
+                    await self.async_update_door_log_data(json_data)
+                    # Fire HA event
+                    new_door_log = await self._data.async_parse_personal_door_log(json_data)
+                    if new_door_log is not None:
+                        LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
+                        event_name = "akuvox_door_update"
+                        entries = await self._data.async_get_stored_data_for_key("door_log_entries")
+                        if (entries and str(entries[0].get("capture_time")) ==
+                                str(new_door_log.get(CAPTURE_TIME_KEY))):
+                            if entries[0].get("local_pic_url"):
+                                new_door_log["LocalPicUrl"] = entries[0]["local_pic_url"]
+                        self.hass.bus.async_fire(event_name, new_door_log)
+            except Exception as error:  # pylint: disable=broad-except
+                LOGGER.error("❌ Door log polling error: %s", error)
             await asyncio.sleep(2)  # Wait for 2 seconds before calling again
 
     async def async_update_door_log_data(self, json_data):
@@ -473,6 +476,10 @@ class AkuvoxApiClient:
         Notifies the door log sensor via the 'akuvox_door_log_updated' event.
         """
         try:
+            if not isinstance(json_data, list):
+                LOGGER.debug("⏭️ Door log response is not a list (%s), skipping merge",
+                             type(json_data).__name__)
+                return
             changed, entries = await self._data.async_merge_door_log_entries(json_data)
             needs_download = any(
                 entry.get("local_pic_url") == "" and entry.get("pic_url")
@@ -670,11 +677,17 @@ class AkuvoxApiClient:
             try:
                 json_data = response.json()
 
+                # Door log requests: raw list response
+                if isinstance(json_data, list):
+                    return json_data
+
                 # Standard requests
                 if "result" in json_data:
                     if json_data["result"] == 0:
                         if "datas" in json_data:
                             return json_data["datas"]
+                        if "data" in json_data:
+                            return json_data["data"]
                         return json_data
                     self._last_error = json_data
                     LOGGER.warning("🤨 Response: %s", str(json_data))
