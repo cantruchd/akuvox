@@ -28,7 +28,7 @@ class DoorLogPoller:
         """Start polling the personal door log."""
         if self.async_retrieve_personal_door_log:
             if not self.is_polling:
-                LOGGER.warning("🔄 Polling user's personal door log every %s second%s.",
+                LOGGER.debug("🔄 Polling user's personal door log every %s second%s.",
                              str(self.interval),
                              "" if self.interval == 0 else "s")
                 self.is_polling = True
