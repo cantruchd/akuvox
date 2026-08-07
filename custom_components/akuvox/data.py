@@ -217,7 +217,7 @@ class AkuvoxData:
     async def async_merge_door_log_entries(self, json_data: list):
         """Merge door log entries from API response into the stored list.
 
-        Returns (changed, entries) where entries is newest-first and capped at 50.
+        Returns (changed, entries) where entries is newest-first and capped at 500.
         """
         entries = await self.async_get_stored_data_for_key("door_log_entries")
         if entries is None:
@@ -241,7 +241,7 @@ class AkuvoxData:
             existing_times.add(capture_time)
             changed = True
         if changed:
-            del entries[50:]
+            del entries[500:]
             await self.async_set_stored_data_for_key("door_log_entries", entries)
         return changed, entries
 
