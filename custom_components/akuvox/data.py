@@ -230,12 +230,19 @@ class AkuvoxData:
             if not isinstance(door_log_json, dict):
                 continue
             capture_time = door_log_json.get(CAPTURE_TIME_KEY, "")
-            if not capture_time or capture_time in existing_times:
+            if not capture_time:
+                continue
+            if capture_time in existing_times:
+                for entry in entries:
+                    if entry.get("capture_time") == capture_time and not entry.get("capture_type"):
+                        entry["capture_type"] = door_log_json.get("CaptureType", "")
+                        changed = True
                 continue
             new_items.append({
                 "capture_time": capture_time,
                 "location": door_log_json.get("Location", ""),
                 "initiator": door_log_json.get("Initiator", ""),
+                "capture_type": door_log_json.get("CaptureType", ""),
                 "relay": door_log_json.get("Relay", ""),
                 "mac": door_log_json.get("MAC", ""),
                 "building_name": door_log_json.get("BuildingName", ""),

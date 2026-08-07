@@ -122,7 +122,9 @@ class AkuvoxDoorLogEntryCamera(Camera):
         capture_time = entry.get("capture_time") or "?"
         location = entry.get("location") or "?"
         initiator = entry.get("initiator") or "?"
-        return f"Door Log {self._rank:03d} | {capture_time} | {location} | {initiator}"
+        unlock = self._format_unlock_method(entry.get("capture_type") or "")
+        return (f"Door Log {self._rank:03d} | {capture_time} | {location} | "
+                f"{initiator} | {unlock}")
 
     def update_data(self, log_entry: dict, rank: int):
         """Update this camera with the latest entry data."""
@@ -132,11 +134,31 @@ class AkuvoxDoorLogEntryCamera(Camera):
 
     @property
     def state(self):
-        """Return date/time, door and initiator as the state."""
+        """Return date/time, door, initiator and unlock method (multi-line)."""
         capture_time = self._log_entry.get("capture_time") or "?"
         location = self._log_entry.get("location") or "?"
         initiator = self._log_entry.get("initiator") or "?"
-        return f"{capture_time} | {location} | {initiator}"
+        unlock = self._format_unlock_method(self._log_entry.get("capture_type") or "")
+        return f"{capture_time}\n{location}\n{initiator}\n{unlock}"
+
+    @staticmethod
+    def _format_unlock_method(capture_type: str) -> str:
+        """Map raw captureType to a human-readable unlock method."""
+        mapping = {
+            "faceUnlock": "Face Unlock",
+            "remoteOpenDoor": "SmartPlus Unlock",
+            "password": "Password",
+            "card": "Card",
+            "fingerprint": "Fingerprint",
+            "qrCode": "QR Code",
+            "temporaryKey": "Temp Key",
+            "bluetooth": "Bluetooth",
+            "key": "Key",
+            "call": "Call to Unlock",
+        }
+        if not capture_type:
+            return "Unknown"
+        return mapping.get(capture_type, capture_type)
 
     def _local_path(self):
         """Resolve the local screenshot file path for this entry."""
