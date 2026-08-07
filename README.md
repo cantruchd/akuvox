@@ -87,18 +87,8 @@ The `LocalPicUrl` value is added when the camera screenshot was successfully dow
 #### 6. `trigger.event.data.RelayName`
 The `RelayName` value represents the name of the door relay that was opened (useful if your door has multiple relays), eg: `Relay1`, `Relay2`, etc.
 
-### Door Log Sensor
-A `sensor.akuvox_door_log` entity is created on its own "Door Log" device. Its state shows the newest entry (`Location - Initiator`) and its entity picture shows the newest screenshot. The attributes hold the list of the 500 most recent door log entries (newest first), each containing:- `capture_time` — when the door was rung/opened
-- `location` — which door (eg: `Front Door`)
-- `initiator` — who triggered the event
-- `relay` / `mac` — the relay name and device MAC address
-- `building_name` / `room_num` — building and room of the door
-- `pic_url` — remote screenshot URL (may expire on Akuvox's server)
-- `local_pic_url` — locally downloaded screenshot (`/local/akuvox/...`), kept for 30 days
-
-Access the list in automations/scripts with `state_attr('sensor.akuvox_door_log', 'entries')` or the newest entry with `state_attr('sensor.akuvox_door_log', 'latest')`.
-
-Additionally, the 100 most recent entries are exposed as individual sensors (`sensor.akuvox_door_log_<capture time>`) on the same "Door Log" device — each with the screenshot as entity picture and the full entry as attributes, so every log is visible directly in the device page.
+### Door Log Cameras
+Each of the 500 most recent door log entries becomes a camera entity on the "Door Log" device (`Door Log 001`, `Door Log 002`, ...), showing the full-size screenshot. The camera state shows `capture time | door | initiator` (eg: `2026-08-07 16:09:37 | 1005 Behind Carpark Entrance Door 3 | Chris Hoang`). Screenshots are stored locally in `www/akuvox/` for 30 days (auto-deleted).
 
 ---
 
