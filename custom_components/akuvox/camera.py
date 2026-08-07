@@ -134,12 +134,22 @@ class AkuvoxDoorLogEntryCamera(Camera):
 
     @property
     def state(self):
-        """Return date/time, door, initiator and unlock method (multi-line)."""
+        """Return date/time, door, initiator and unlock method as the state."""
         capture_time = self._log_entry.get("capture_time") or "?"
         location = self._log_entry.get("location") or "?"
         initiator = self._log_entry.get("initiator") or "?"
         unlock = self._format_unlock_method(self._log_entry.get("capture_type") or "")
-        return f"{capture_time}\n{location}\n{initiator}\n{unlock}"
+        return f"{capture_time} | {location} | {initiator} | {unlock}"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Expose each field as its own attribute so HA shows them on separate rows."""
+        return {
+            "time": self._log_entry.get("capture_time") or "",
+            "door": self._log_entry.get("location") or "",
+            "initiator": self._log_entry.get("initiator") or "",
+            "unlock_method": self._format_unlock_method(self._log_entry.get("capture_type") or ""),
+        }
 
     @staticmethod
     def _format_unlock_method(capture_type: str) -> str:
