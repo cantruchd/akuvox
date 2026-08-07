@@ -173,16 +173,6 @@ class AkuvoxDoorLogEntryCamera(Camera):
             return None
         return self.hass.config.path(local_pic_url.replace("/local/", "", 1))
 
-    @property
-    def content_type(self):
-        """Return the content type based on the screenshot file extension."""
-        file_path = self._local_path()
-        if file_path and file_path.lower().endswith(".png"):
-            return "image/png"
-        if file_path and file_path.lower().endswith(".webp"):
-            return "image/webp"
-        return "image/jpeg"
-
     async def async_camera_image(self, width: int | None = None,
                                  height: int | None = None):
         """Return this entry's screenshot as image bytes."""
