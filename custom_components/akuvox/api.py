@@ -442,9 +442,28 @@ class AkuvoxApiClient:
         return None
 
     async def async_start_polling_personal_door_log(self):
-        """Poll the server contineously for the latest personal door log."""
+        """Backfill history, then poll the server for the latest personal door log."""
+        # Backfill older entries first so the door log list is complete
+        await self.async_backfill_door_log_entries()
         # Make sure only 1 instance of the door log polling is running
         self.hass.async_create_task(self.async_retrieve_personal_door_log())
+
+    async def async_backfill_door_log_entries(self):
+        """Page through the door log API to backfill history (up to 500 entries)."""
+        try:
+            for page in range(1, 26):  # 500 entries max / 20 per page
+                json_data = await self.async_get_personal_door_log(page=page)
+                if json_data is None or len(json_data) == 0:
+                    break
+                await self.async_update_door_log_data(json_data)
+                entries = await self._data.async_get_stored_data_for_key("door_log_entries") or []
+                if len(entries) >= 500:
+                    break
+                if len(json_data) < 20:
+                    break
+                await asyncio.sleep(0.5)
+        except Exception as error:  # pylint: disable=broad-except
+            LOGGER.error("❌ Error backfilling door log entries: %s", error)
 
     async def async_retrieve_personal_door_log(self) -> bool:
         """Request and parse the user's door log every 2 seconds."""
@@ -580,12 +599,13 @@ class AkuvoxApiClient:
         if removed:
             LOGGER.info("🧹 Deleted %s door screenshot(s) older than 30 days", removed)
 
-    async def async_get_personal_door_log(self):
+    async def async_get_personal_door_log(self, page: int = 1):
         """Request the user's personal door log data."""
         import time
         app_type = self._data.app_type or "single"
         ts = int(time.time() * 1000)
         path = API_V4_GET_PERSONAL_DOOR_LOG.replace("single/", f"{app_type}/")
+        path = path.replace("page=1", f"page={page}")
         url = f"https://{API_V4_HOST}{path}&_t={ts}"
         self._log_api("async_get_personal_door_log", self._data.token, url)
         data = {}
