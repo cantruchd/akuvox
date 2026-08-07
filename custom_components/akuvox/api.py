@@ -60,7 +60,6 @@ class AkuvoxApiClient:
     hass: HomeAssistant
     door_log_poller: DoorLogPoller
     _last_error: dict | None = None
-    _last_screenshot_time: str | None = None
 
     def __init__(
         self,
@@ -453,39 +452,52 @@ class AkuvoxApiClient:
             # Get the latest pesonal door log
             json_data = await self.async_get_personal_door_log()
             if json_data is not None:
+                # Update the door log entry list + download screenshots
+                await self.async_update_door_log_data(json_data)
+                # Fire HA event
                 new_door_log = await self._data.async_parse_personal_door_log(json_data)
                 if new_door_log is not None:
-                    # Fire HA event
                     LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
                     event_name = "akuvox_door_update"
-                    if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY]:
-                        local_pic_url = await self.async_download_door_screenshot(
-                            new_door_log[PIC_URL_KEY],
-                            new_door_log.get(CAPTURE_TIME_KEY, ""))
-                        if local_pic_url:
-                            new_door_log["LocalPicUrl"] = local_pic_url
+                    entries = await self._data.async_get_stored_data_for_key("door_log_entries")
+                    if (entries and str(entries[0].get("capture_time")) ==
+                            str(new_door_log.get(CAPTURE_TIME_KEY))):
+                        if entries[0].get("local_pic_url"):
+                            new_door_log["LocalPicUrl"] = entries[0]["local_pic_url"]
                     self.hass.bus.async_fire(event_name, new_door_log)
-                else:
-                    # Event may have fired without screenshot (asap mode) - retry download
-                    await self.async_download_pending_screenshot(json_data)
             await asyncio.sleep(2)  # Wait for 2 seconds before calling again
 
-    async def async_download_pending_screenshot(self, json_data):
-        """Download screenshot for a recent event that fired without one."""
+    async def async_update_door_log_data(self, json_data):
+        """Merge door log entries into the stored list and download screenshots.
+
+        Notifies the door log sensor via the 'akuvox_door_log_updated' event.
+        """
         try:
-            latest_entry = json_data[0]
-        except (IndexError, TypeError):
-            return
-        capture_time = latest_entry.get(CAPTURE_TIME_KEY, "")
-        if not capture_time or not latest_entry.get(PIC_URL_KEY):
-            return
-        if capture_time == self._last_screenshot_time:
-            return
-        local_pic_url = await self.async_download_door_screenshot(
-            latest_entry[PIC_URL_KEY], capture_time)
-        if local_pic_url:
-            self._last_screenshot_time = capture_time
-            LOGGER.debug("🖼️ Screenshot downloaded for previously-fired event %s", capture_time)
+            changed, entries = await self._data.async_merge_door_log_entries(json_data)
+            needs_download = any(
+                entry.get("local_pic_url") == "" and entry.get("pic_url")
+                and entry.get("ss_attempts", 0) < 5
+                for entry in entries)
+            if not changed and not needs_download:
+                return
+            attempted = False
+            for entry in entries:
+                if entry.get("local_pic_url") or not entry.get("pic_url"):
+                    continue
+                if entry.get("ss_attempts", 0) >= 5:
+                    continue
+                attempted = True
+                local_pic_url = await self.async_download_door_screenshot(
+                    entry["pic_url"], entry["capture_time"])
+                entry["ss_attempts"] = entry.get("ss_attempts", 0) + 1
+                if local_pic_url:
+                    entry["local_pic_url"] = local_pic_url
+            if attempted:
+                await self._data.async_set_stored_data_for_key("door_log_entries", entries)
+            if changed or attempted:
+                self.hass.bus.async_fire("akuvox_door_log_updated")
+        except Exception as error:  # pylint: disable=broad-except
+            LOGGER.error("❌ Error updating door log data: %s", error)
 
     async def async_download_door_screenshot(self, pic_url: str, capture_time: str) -> str | None:
         """Download door log screenshot to www/akuvox and return local URL.

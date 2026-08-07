@@ -87,6 +87,17 @@ The `LocalPicUrl` value is added when the camera screenshot was successfully dow
 #### 6. `trigger.event.data.RelayName`
 The `RelayName` value represents the name of the door relay that was opened (useful if your door has multiple relays), eg: `Relay1`, `Relay2`, etc.
 
+### Door Log Sensor
+A `sensor.akuvox_door_log` entity is created on its own "Door Log" device. It holds a list of the 50 most recent door log entries (newest first), each containing:
+- `capture_time` — when the door was rung/opened
+- `location` — which door (eg: `Front Door`)
+- `initiator` — who triggered the event
+- `relay` / `mac` — the relay name and device MAC address
+- `pic_url` — remote screenshot URL (may expire on Akuvox's server)
+- `local_pic_url` — locally downloaded screenshot (`/local/akuvox/...`), kept for 30 days
+
+Access the list in automations/scripts with `state_attr('sensor.akuvox_door_log', 'entries')` or the newest entry with `state_attr('sensor.akuvox_door_log', 'latest')`.
+
 ---
 
 ##### YAML Examples

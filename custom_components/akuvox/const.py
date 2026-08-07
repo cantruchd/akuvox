@@ -5,7 +5,7 @@ LOGGER: Logger = getLogger(__package__)
 
 NAME = "Akuvox SmartPlus"
 DOMAIN = "akuvox"
-VERSION = "1.0.38"
+VERSION = "1.0.39"
 WEBHOOK_ID = "akuvox_token"
 ATTRIBUTION = "Data provided by https://ecloud.akuvox.com/"
 

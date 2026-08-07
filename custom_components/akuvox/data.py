@@ -214,6 +214,37 @@ class AkuvoxData:
             await self.async_set_stored_data_for_key("latest_door_log", new_door_log)
         return ret_value
 
+    async def async_merge_door_log_entries(self, json_data: list):
+        """Merge door log entries from API response into the stored list.
+
+        Returns (changed, entries) where entries is newest-first and capped at 50.
+        """
+        entries = await self.async_get_stored_data_for_key("door_log_entries")
+        if entries is None:
+            entries = []
+        existing_times = {entry.get("capture_time") for entry in entries}
+        changed = False
+        for door_log_json in json_data:
+            capture_time = door_log_json.get(CAPTURE_TIME_KEY, "")
+            if not capture_time or capture_time in existing_times:
+                continue
+            entries.insert(0, {
+                "capture_time": capture_time,
+                "location": door_log_json.get("Location", ""),
+                "initiator": door_log_json.get("Initiator", ""),
+                "relay": door_log_json.get("Relay", ""),
+                "mac": door_log_json.get("MAC", ""),
+                "pic_url": door_log_json.get(PIC_URL_KEY, ""),
+                "local_pic_url": "",
+                "ss_attempts": 0,
+            })
+            existing_times.add(capture_time)
+            changed = True
+        if changed:
+            del entries[50:]
+            await self.async_set_stored_data_for_key("door_log_entries", entries)
+        return changed, entries
+
     ###################
 
     async def async_set_stored_data_for_key(self, key, value):
