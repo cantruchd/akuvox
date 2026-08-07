@@ -123,7 +123,7 @@ class AkuvoxDoorLogCamera(Camera):
         local_pic_url = entries[0].get("local_pic_url", "")
         if not local_pic_url:
             return None
-        file_path = self.hass.config.path(local_pic_url.replace("/local/", "", 1))
+        file_path = self.hass.config.path(local_pic_url.replace("/local/", "www/", 1))
         return await self.hass.async_add_executor_job(self._read_image, file_path)
 
     def _read_image(self, file_path):
@@ -171,7 +171,7 @@ class AkuvoxDoorLogEntryCamera(Camera):
         local_pic_url = self._log_entry.get("local_pic_url", "")
         if not local_pic_url:
             return None
-        return self.hass.config.path(local_pic_url.replace("/local/", "", 1))
+        return self.hass.config.path(local_pic_url.replace("/local/", "www/", 1))
 
     async def async_camera_image(self, width: int | None = None,
                                  height: int | None = None):
