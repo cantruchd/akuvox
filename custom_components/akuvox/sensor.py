@@ -173,8 +173,20 @@ class AkuvoxDoorLogSensor(SensorEntity, AkuvoxEntity):
 
     @property
     def native_value(self):
-        """Return the number of door log entries."""
-        return len(self._entries)
+        """Return a readable summary of the newest door log entry."""
+        latest = self._entries[0] if self._entries else None
+        if latest:
+            location = latest.get("location") or "?"
+            initiator = latest.get("initiator") or "?"
+            return f"{location} - {initiator}"
+        return "No entries"
+
+    @property
+    def entity_picture(self):
+        """Show the newest door log screenshot as the entity picture."""
+        if self._entries:
+            return self._entries[0].get("local_pic_url") or self._entries[0].get("pic_url")
+        return None
 
     @property
     def extra_state_attributes(self):
@@ -183,4 +195,5 @@ class AkuvoxDoorLogSensor(SensorEntity, AkuvoxEntity):
         return {
             "entries": self._entries,
             "latest": latest,
+            "count": len(self._entries),
         }

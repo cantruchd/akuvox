@@ -88,7 +88,7 @@ The `LocalPicUrl` value is added when the camera screenshot was successfully dow
 The `RelayName` value represents the name of the door relay that was opened (useful if your door has multiple relays), eg: `Relay1`, `Relay2`, etc.
 
 ### Door Log Sensor
-A `sensor.akuvox_door_log` entity is created on its own "Door Log" device. It holds a list of the 500 most recent door log entries (newest first), each containing:
+A `sensor.akuvox_door_log` entity is created on its own "Door Log" device. Its state shows the newest entry (`Location - Initiator`) and its entity picture shows the newest screenshot. The attributes hold the list of the 500 most recent door log entries (newest first), each containing:
 - `capture_time` — when the door was rung/opened
 - `location` — which door (eg: `Front Door`)
 - `initiator` — who triggered the event
