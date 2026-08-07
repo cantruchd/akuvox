@@ -121,9 +121,10 @@ async def async_start_polling(hass: HomeAssistant):
 
 def get_api_client(hass: HomeAssistant):
     """Akuvox API Client."""
-    for _key, value in hass.data[DOMAIN].items():
-        coordinator: AkuvoxDataUpdateCoordinator = value
-        return coordinator.client
+    for value in hass.data[DOMAIN].values():
+        if isinstance(value, AkuvoxDataUpdateCoordinator):
+            return value.client
+    return None
 
 # Integration options
 

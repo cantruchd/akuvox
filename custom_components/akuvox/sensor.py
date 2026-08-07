@@ -18,8 +18,10 @@ from .entity import AkuvoxEntity
 async def async_setup_entry(hass, entry, async_add_devices):
     """Set up the temporary door key platform."""
     coordinator: AkuvoxDataUpdateCoordinator
-    for _key, value in hass.data[DOMAIN].items():
-        coordinator = value
+    for value in hass.data[DOMAIN].values():
+        if isinstance(value, AkuvoxDataUpdateCoordinator):
+            coordinator = value
+            break
     client = coordinator.client
     store = storage.Store(hass, 1, DATA_STORAGE_KEY)
     device_data: dict = await store.async_load() # type: ignore

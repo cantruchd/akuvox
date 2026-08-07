@@ -68,8 +68,10 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         if self.akuvox_api_client is None:
             coordinator: AkuvoxDataUpdateCoordinator = None # type: ignore
             if DOMAIN in self.hass.data:
-                for _key, value in self.hass.data[DOMAIN].items():
-                    coordinator = value
+                for value in self.hass.data[DOMAIN].values():
+                    if isinstance(value, AkuvoxDataUpdateCoordinator):
+                        coordinator = value
+                        break
             if coordinator:
                 self.akuvox_api_client = coordinator.client
             else:
