@@ -451,25 +451,25 @@ class AkuvoxApiClient:
     async def async_backfill_door_log_entries(self):
         """Page through the door log API to backfill history (up to 500 entries)."""
         try:
-            LOGGER.debug("🚪 Backfilling door log history...")
+            LOGGER.warning("🚪 Backfilling door log history...")
             for page in range(1, 26):  # 500 entries max / 20 per page
                 json_data = await self.async_get_personal_door_log(page=page)
                 if json_data is None or len(json_data) == 0:
-                    LOGGER.debug("🚪 Backfill: no more data on page %s, stopping", page)
+                    LOGGER.warning("🚪 Backfill: no more data on page %s, stopping", page)
                     break
                 changed, entries = await self._data.async_merge_door_log_entries(json_data)
-                LOGGER.debug("🚪 Backfill page %s: got %s entries, total %s (changed=%s)",
-                             page, len(json_data), len(entries), changed)
+                LOGGER.warning("🚪 Backfill page %s: got %s entries, total %s (changed=%s)",
+                               page, len(json_data), len(entries), changed)
                 await self.async_update_door_log_data(json_data)
                 entries = await self._data.async_get_stored_data_for_key("door_log_entries") or []
                 if len(entries) >= 500:
-                    LOGGER.debug("🚪 Backfill: reached 500 entries, stopping")
+                    LOGGER.warning("🚪 Backfill: reached 500 entries, stopping")
                     break
                 if len(json_data) < 20:
-                    LOGGER.debug("🚪 Backfill: short page (%s entries), stopping", len(json_data))
+                    LOGGER.warning("🚪 Backfill: short page (%s entries), stopping", len(json_data))
                     break
                 await asyncio.sleep(0.5)
-            LOGGER.debug("🚪 Backfill done")
+            LOGGER.warning("🚪 Backfill done")
         except Exception as error:  # pylint: disable=broad-except
             LOGGER.error("❌ Error backfilling door log entries: %s", error)
 
@@ -485,7 +485,7 @@ class AkuvoxApiClient:
                     # Fire HA event
                     new_door_log = await self._data.async_parse_personal_door_log(json_data)
                     if new_door_log is not None:
-                        LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
+                        LOGGER.warning("🚪 New door open event occurred. Firing akuvox_door_update event")
                         event_name = "akuvox_door_update"
                         entries = await self._data.async_get_stored_data_for_key("door_log_entries")
                         if (entries and str(entries[0].get("capture_time")) ==
@@ -504,7 +504,7 @@ class AkuvoxApiClient:
         """
         try:
             if not isinstance(json_data, list):
-                LOGGER.debug("⏭️ Door log response is not a list (%s), skipping merge",
+                LOGGER.warning("⏭️ Door log response is not a list (%s), skipping merge",
                              type(json_data).__name__)
                 return
             changed, entries = await self._data.async_merge_door_log_entries(json_data)
@@ -563,7 +563,7 @@ class AkuvoxApiClient:
             if response.status_code == 200 and response.content:
                 await self.hass.async_add_executor_job(
                     self._save_screenshot_and_cleanup, local_path, response.content)
-                LOGGER.info("🖼️ Door screenshot saved to %s", local_path)
+                LOGGER.warning("🖼️ Door screenshot saved to %s", local_path)
                 return f"/local/akuvox/{filename}"
             LOGGER.warning("❌ Unable to download door screenshot (HTTP %s): %s",
                            response.status_code, url)
@@ -605,7 +605,7 @@ class AkuvoxApiClient:
         except OSError as error:
             LOGGER.warning("🧹 Unable to scan %s for old screenshots: %s", www_dir, error)
         if removed:
-            LOGGER.info("🧹 Deleted %s door screenshot(s) older than 30 days", removed)
+            LOGGER.warning("🧹 Deleted %s door screenshot(s) older than 30 days", removed)
 
     async def async_get_personal_door_log(self, page: int = 1):
         """Request the user's personal door log data."""
@@ -645,7 +645,7 @@ class AkuvoxApiClient:
             if json_data is not None and len(json_data) > 0:
                 return json_data
 
-        LOGGER.debug("No door log entries found")
+        LOGGER.warning("No door log entries found")
         return None
 
     def _normalize_door_log_response(self, json_data):
