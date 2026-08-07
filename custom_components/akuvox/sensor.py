@@ -217,13 +217,14 @@ class AkuvoxDoorLogEntrySensor(SensorEntity, AkuvoxEntity):
 
     MAX_ENTRY_SENSORS = 100
 
-    def __init__(self, client: AkuvoxApiClient, entry, log_entry: dict) -> None:
+    def __init__(self, client: AkuvoxApiClient, entry, log_entry: dict, rank: int) -> None:
         """Initialize one door log entry sensor."""
         super().__init__(client=client, entry=entry)
         self._log_entry = log_entry
+        self._rank = rank
         capture_time = log_entry.get("capture_time", "")
         self._attr_unique_id = f"Door Log {capture_time}"
-        self._attr_name = f"Door Log {capture_time}"
+        self._attr_name = self._build_name()
         self._attr_icon = "mdi:door"
         self._attr_should_poll = False
         self._attr_device_info = DeviceInfo(
@@ -233,18 +234,26 @@ class AkuvoxDoorLogEntrySensor(SensorEntity, AkuvoxEntity):
             manufacturer=NAME,
         )
 
-    def update_data(self, log_entry: dict):
+    def _build_name(self) -> str:
+        """Name with zero-padded rank so HA sorts newest first."""
+        return f"Door Log {self._rank:03d} · {self._log_entry.get('capture_time', '')}"
+
+    def update_data(self, log_entry: dict, rank: int):
         """Update this sensor with the latest entry data."""
         self._log_entry = log_entry
+        self._rank = rank
+        self._attr_name = self._build_name()
 
     @property
     def native_value(self):
-        """Return the initiator of the log entry."""
-        return self._log_entry.get("initiator") or "?"
+        """Return the door and initiator of the log entry."""
+        location = self._log_entry.get("location") or "?"
+        initiator = self._log_entry.get("initiator") or "?"
+        return f"{location} - {initiator}"
 
     @property
     def entity_picture(self):
-        """Show the log entry screenshot as the entity picture."""
+        """Show the full log entry screenshot as the entity picture."""
         return self._log_entry.get("local_pic_url") or self._log_entry.get("pic_url")
 
     @property
@@ -289,16 +298,17 @@ class AkuvoxDoorLogManager:
         entries = entries[:AkuvoxDoorLogEntrySensor.MAX_ENTRY_SENSORS]
 
         new_entities = []
-        for log_entry in entries:
+        for rank, log_entry in enumerate(entries, start=1):
             key = str(log_entry.get("capture_time", ""))
             if not key:
                 continue
             if key in self.entities:
-                self.entities[key].update_data(log_entry)
+                self.entities[key].update_data(log_entry, rank)
                 self.entities[key].async_write_ha_state()
             else:
                 sensor = AkuvoxDoorLogEntrySensor(
-                    client=self.client, entry=self.entry, log_entry=log_entry)
+                    client=self.client, entry=self.entry,
+                    log_entry=log_entry, rank=rank)
                 self.entities[key] = sensor
                 new_entities.append(sensor)
         if new_entities:
