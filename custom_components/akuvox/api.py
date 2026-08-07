@@ -753,7 +753,7 @@ class AkuvoxApiClient:
                             return json_data["data"]
                         return json_data
                     self._last_error = json_data
-                    LOGGER.warning("🤨 Response: %s", str(json_data))
+                    LOGGER.warning("🤨 Response: %s | URL: %s", str(json_data), url)
                     return None
 
                 # Temp key requests
