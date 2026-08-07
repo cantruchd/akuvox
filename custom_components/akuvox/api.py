@@ -447,10 +447,10 @@ class AkuvoxApiClient:
         await self.async_start_polling()
 
     async def async_backfill_door_log_entries(self):
-        """Page through the door log API to backfill history (up to 500 entries)."""
+        """Page through the door log API to backfill history (up to 1000 entries)."""
         try:
             LOGGER.warning("🚪 Backfilling door log history...")
-            for page in range(1, 26):  # 500 entries max / 20 per page
+            for page in range(1, 101):  # 1000 entries max / ~20 per page
                 json_data = await self.async_get_personal_door_log(page=page)
                 if json_data is None or len(json_data) == 0:
                     LOGGER.warning("🚪 Backfill: no more data on page %s, stopping", page)
@@ -460,8 +460,8 @@ class AkuvoxApiClient:
                                page, len(json_data), len(entries), changed)
                 await self.async_update_door_log_data(json_data)
                 entries = await self._data.async_get_stored_data_for_key("door_log_entries") or []
-                if len(entries) >= 500:
-                    LOGGER.warning("🚪 Backfill: reached 500 entries, stopping")
+                if len(entries) >= 1000:
+                    LOGGER.warning("🚪 Backfill: reached 1000 entries, stopping")
                     break
                 if len(json_data) < 20:
                     LOGGER.warning("🚪 Backfill: short page (%s entries), stopping", len(json_data))

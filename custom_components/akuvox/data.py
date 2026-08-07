@@ -256,7 +256,7 @@ class AkuvoxData:
         if changed:
             entries = new_items + entries
             entries.sort(key=lambda e: str(e.get("capture_time", "")), reverse=True)
-            del entries[500:]
+            del entries[1000:]
             await self.async_set_stored_data_for_key("door_log_entries", entries)
         return changed, entries
 

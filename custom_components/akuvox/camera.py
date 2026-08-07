@@ -187,7 +187,7 @@ class AkuvoxDoorLogEntryCamera(Camera):
 class AkuvoxDoorLogCameraManager:
     """Creates and keeps per-entry door log cameras in sync with storage."""
 
-    MAX_ENTRY_CAMERAS = 500
+    MAX_ENTRY_CAMERAS = 1000
 
     def __init__(self, hass: HomeAssistant, async_add_devices) -> None:
         """Initialize the door log entry camera manager."""
