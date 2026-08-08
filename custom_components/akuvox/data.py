@@ -234,9 +234,14 @@ class AkuvoxData:
                 continue
             if capture_time in existing_times:
                 for entry in entries:
-                    if entry.get("capture_time") == capture_time and not entry.get("capture_type"):
-                        entry["capture_type"] = door_log_json.get("CaptureType", "")
-                        changed = True
+                    if entry.get("capture_time") == capture_time:
+                        if not entry.get("capture_type") and door_log_json.get("CaptureType", ""):
+                            entry["capture_type"] = door_log_json.get("CaptureType", "")
+                            changed = True
+                        if not entry.get("pic_url") and door_log_json.get(PIC_URL_KEY, ""):
+                            entry["pic_url"] = door_log_json.get(PIC_URL_KEY, "")
+                            entry["ss_attempts"] = 0
+                            changed = True
                 continue
             new_items.append({
                 "capture_time": capture_time,
