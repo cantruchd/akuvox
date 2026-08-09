@@ -191,8 +191,10 @@ class AkuvoxData:
             latest_door_log = await self.async_get_stored_data_for_key("latest_door_log")
             if latest_door_log is not None and CAPTURE_TIME_KEY in latest_door_log:
                 if new_door_log is not None and CAPTURE_TIME_KEY in new_door_log:
-                    # Ignore previous door open event
-                    if str(latest_door_log[CAPTURE_TIME_KEY]) == str(new_door_log[CAPTURE_TIME_KEY]):
+                    # Ignore previous door open event (same door at same time)
+                    if (str(latest_door_log[CAPTURE_TIME_KEY]) == str(new_door_log[CAPTURE_TIME_KEY]) and
+                            str(latest_door_log.get("MAC", "")) == str(new_door_log.get("MAC", "")) and
+                            str(latest_door_log.get("Location", "")) == str(new_door_log.get("Location", ""))):
                         return None
                     # Screenshot required and currently unavailable
                     if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY] == "":
@@ -223,7 +225,10 @@ class AkuvoxData:
         if entries is None:
             entries = []
         entries = [entry for entry in entries if isinstance(entry, dict)]
-        existing_times = {entry.get("capture_time") for entry in entries}
+        existing_keys = {
+            f"{entry.get('capture_time')}|{entry.get('mac')}|{entry.get('location')}"
+            for entry in entries
+        }
         changed = False
         new_items = []
         for door_log_json in json_data:
@@ -232,7 +237,8 @@ class AkuvoxData:
             capture_time = door_log_json.get(CAPTURE_TIME_KEY, "")
             if not capture_time:
                 continue
-            if capture_time in existing_times:
+            key = f"{capture_time}|{door_log_json.get('MAC', '')}|{door_log_json.get('Location', '')}"
+            if key in existing_keys:
                 for entry in entries:
                     if entry.get("capture_time") == capture_time:
                         if not entry.get("capture_type") and door_log_json.get("CaptureType", ""):
@@ -256,7 +262,7 @@ class AkuvoxData:
                 "local_pic_url": "",
                 "ss_attempts": 0,
             })
-            existing_times.add(capture_time)
+            existing_keys.add(key)
             changed = True
         if changed:
             entries = new_items + entries

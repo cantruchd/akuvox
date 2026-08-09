@@ -487,7 +487,11 @@ class AkuvoxApiClient:
                         event_name = "akuvox_door_update"
                         entries = await self._data.async_get_stored_data_for_key("door_log_entries")
                         if (entries and str(entries[0].get("capture_time")) ==
-                                str(new_door_log.get(CAPTURE_TIME_KEY))):
+                                str(new_door_log.get(CAPTURE_TIME_KEY)) and
+                                str(entries[0].get("mac", "")) ==
+                                str(new_door_log.get("MAC", "")) and
+                                str(entries[0].get("location", "")) ==
+                                str(new_door_log.get("Location", ""))):
                             if entries[0].get("local_pic_url"):
                                 new_door_log["LocalPicUrl"] = entries[0]["local_pic_url"]
                         self.hass.bus.async_fire(event_name, new_door_log)
@@ -520,7 +524,7 @@ class AkuvoxApiClient:
                     continue
                 attempted = True
                 local_pic_url = await self.async_download_door_screenshot(
-                    entry["pic_url"], entry["capture_time"])
+                    entry["pic_url"], entry["capture_time"], entry.get("location", ""))
                 entry["ss_attempts"] = entry.get("ss_attempts", 0) + 1
                 if local_pic_url:
                     entry["local_pic_url"] = local_pic_url
@@ -531,14 +535,15 @@ class AkuvoxApiClient:
         except Exception as error:  # pylint: disable=broad-except
             LOGGER.error("❌ Error updating door log data: %s", error)
 
-    async def async_download_door_screenshot(self, pic_url: str, capture_time: str) -> str | None:
+    async def async_download_door_screenshot(self, pic_url: str, capture_time: str,
+                                             location: str = "") -> str | None:
         """Download door log screenshot to www/akuvox and return local URL.
 
         Screenshots older than 30 days are automatically deleted to avoid
         filling up the disk.
         """
         www_dir = Path(self.hass.config.path("www", "akuvox"))
-        filename = self._get_screenshot_filename(capture_time, pic_url)
+        filename = self._get_screenshot_filename(capture_time, pic_url, location)
         local_path = www_dir / filename
         if local_path.exists():
             LOGGER.debug("✅ Door screenshot already exists: %s", filename)
@@ -569,13 +574,16 @@ class AkuvoxApiClient:
             LOGGER.error("❌ Error downloading door screenshot: %s", error)
         return None
 
-    def _get_screenshot_filename(self, capture_time: str, pic_url: str) -> str:
+    def _get_screenshot_filename(self, capture_time: str, pic_url: str,
+                                 location: str = "") -> str:
         """Build a safe filename from capture time and source URL extension."""
         safe_time = re.sub(r"\D", "", str(capture_time))
+        safe_loc = re.sub(r"\W+", "_", str(location))[:40]
+        suffix = f"_{safe_loc}" if safe_loc else ""
         extension = Path(urlparse(pic_url).path).suffix.lower()
         if extension not in (".jpg", ".jpeg", ".png", ".webp"):
             extension = ".jpg"
-        return f"door_{safe_time}{extension}"
+        return f"door_{safe_time}{suffix}{extension}"
 
     def _save_screenshot_and_cleanup(self, local_path: Path, content: bytes):
         """Write screenshot to disk and remove screenshots older than 30 days."""

@@ -105,7 +105,8 @@ class AkuvoxDoorLogEntryCamera(Camera):
         self._log_entry = log_entry
         self._rank = rank
         capture_time = log_entry.get("capture_time", "")
-        self._attr_unique_id = f"Door Log Camera {capture_time}"
+        self._attr_unique_id = (f"Door Log Camera {capture_time}|"
+                                f"{log_entry.get('mac', '')}|{log_entry.get('location', '')}")
         self._attr_name = self._build_name()
         self._attr_icon = "mdi:door"
         self._attr_should_poll = False
@@ -236,8 +237,10 @@ class AkuvoxDoorLogCameraManager:
 
         new_entities = []
         for rank, log_entry in enumerate(entries, start=1):
-            key = str(log_entry.get("capture_time", ""))
-            if not key:
+            capture_time = str(log_entry.get("capture_time", ""))
+            key = (f"{capture_time}|{log_entry.get('mac', '')}|"
+                   f"{log_entry.get('location', '')}")
+            if not capture_time:
                 continue
             if key in self.entities:
                 self.entities[key].update_data(log_entry, rank)
