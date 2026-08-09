@@ -1,11 +1,25 @@
 """Constants for akuvox."""
+import json
 from logging import Logger, getLogger
+from pathlib import Path
 
 LOGGER: Logger = getLogger(__package__)
 
 NAME = "Akuvox SmartPlus"
 DOMAIN = "akuvox"
-VERSION = "1.0.64"
+
+
+def _read_manifest_version() -> str:
+    """Read the integration version from manifest.json."""
+    try:
+        manifest_path = Path(__file__).resolve().parent / "manifest.json"
+        with manifest_path.open(encoding="utf-8") as manifest_file:
+            return str(json.load(manifest_file).get("version", "")).lstrip("v")
+    except (OSError, ValueError):
+        return "1.0.0"
+
+
+VERSION = _read_manifest_version()
 WEBHOOK_ID = "akuvox_token"
 ATTRIBUTION = "Data provided by https://ecloud.akuvox.com/"
 
