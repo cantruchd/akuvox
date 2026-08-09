@@ -280,5 +280,4 @@ class AkuvoxDoorLogCameraManager:
                 LOGGER.debug("🧹 Removed %s stale door log camera entit(ies) from registry", removed)
         except Exception as error:  # pylint: disable=broad-except
             LOGGER.error("❌ Error removing stale door log cameras: %s", error)
-        await self._remove_stale_registry_entities()
 
