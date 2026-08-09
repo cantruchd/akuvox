@@ -71,6 +71,8 @@ class AkuvoxApiClient:
         self._session = session
         self.hass = hass
         self._last_error = None
+        self._backfill_task = None
+        self._door_log_lock = asyncio.Lock()
         if entry:
             LOGGER.debug("▶️ Initializing AkuvoxData from API client init")
             self._data = AkuvoxData(
@@ -92,15 +94,27 @@ class AkuvoxApiClient:
         return True
 
     async def async_start_polling(self):
-        """Backfill history, then start polling the personal door log API."""
+        """Start polling the personal door log API immediately.
+
+        Backfill runs as a background task so it never blocks config entry
+        setup; the poller picks up history entries and downloads screenshots
+        incrementally while backfill merges more pages.
+        """
         self.door_log_poller: DoorLogPoller = DoorLogPoller(
             hass=self.hass,
             poll_function=self.async_retrieve_personal_door_log)
-        await self.async_backfill_door_log_entries()
         await self.door_log_poller.async_start()
+        self._backfill_task = asyncio.create_task(self.async_backfill_door_log_entries())
 
     async def async_stop_polling(self):
         """Stop polling the personal door log API."""
+        if getattr(self, "_backfill_task", None):
+            self._backfill_task.cancel()
+            try:
+                await self._backfill_task
+            except asyncio.CancelledError:
+                pass
+            self._backfill_task = None
         await self.door_log_poller.async_stop()
 
     def init_api_with_data(self,
@@ -460,7 +474,8 @@ class AkuvoxApiClient:
                 if json_data is None or len(json_data) == 0:
                     LOGGER.debug("🚪 Backfill: no more data on page %s, stopping", page)
                     break
-                changed, entries = await self._data.async_merge_door_log_entries(json_data)
+                async with self._door_log_lock:
+                    changed, entries = await self._data.async_merge_door_log_entries(json_data)
                 LOGGER.debug("🚪 Backfill page %s: got %s entries, total %s (changed=%s)",
                              page, len(json_data), len(entries), changed)
                 entries = await self._data.async_get_stored_data_for_key("door_log_entries") or []
@@ -514,31 +529,32 @@ class AkuvoxApiClient:
                 LOGGER.debug("⏭️ Door log response is not a list (%s), skipping merge",
                              type(json_data).__name__)
                 return
-            changed, entries = await self._data.async_merge_door_log_entries(json_data)
-            needs_download = any(
-                entry.get("local_pic_url") == "" and entry.get("pic_url")
-                and entry.get("ss_attempts", 0) < 5
-                for entry in entries)
-            if not changed and not needs_download:
-                return
-            attempted = False
-            downloaded = 0
-            for entry in entries:
-                if entry.get("local_pic_url") or not entry.get("pic_url"):
-                    continue
-                if entry.get("ss_attempts", 0) >= 5:
-                    continue
-                if downloaded >= 10:
-                    break
-                attempted = True
-                local_pic_url = await self.async_download_door_screenshot(
-                    entry["pic_url"], entry["capture_time"], entry.get("location", ""))
-                entry["ss_attempts"] = entry.get("ss_attempts", 0) + 1
-                if local_pic_url:
-                    entry["local_pic_url"] = local_pic_url
-                    downloaded += 1
-            if attempted:
-                await self._data.async_set_stored_data_for_key("door_log_entries", entries)
+            async with self._door_log_lock:
+                changed, entries = await self._data.async_merge_door_log_entries(json_data)
+                needs_download = any(
+                    entry.get("local_pic_url") == "" and entry.get("pic_url")
+                    and entry.get("ss_attempts", 0) < 5
+                    for entry in entries)
+                if not changed and not needs_download:
+                    return
+                attempted = False
+                downloaded = 0
+                for entry in entries:
+                    if entry.get("local_pic_url") or not entry.get("pic_url"):
+                        continue
+                    if entry.get("ss_attempts", 0) >= 5:
+                        continue
+                    if downloaded >= 10:
+                        break
+                    attempted = True
+                    local_pic_url = await self.async_download_door_screenshot(
+                        entry["pic_url"], entry["capture_time"], entry.get("location", ""))
+                    entry["ss_attempts"] = entry.get("ss_attempts", 0) + 1
+                    if local_pic_url:
+                        entry["local_pic_url"] = local_pic_url
+                        downloaded += 1
+                if attempted:
+                    await self._data.async_set_stored_data_for_key("door_log_entries", entries)
             if changed or attempted:
                 self.hass.bus.async_fire("akuvox_door_log_updated")
         except Exception as error:  # pylint: disable=broad-except
