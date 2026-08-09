@@ -100,11 +100,13 @@ class AkuvoxApiClient:
         setup; the poller picks up history entries and downloads screenshots
         incrementally while backfill merges more pages.
         """
+        LOGGER.warning("▶️ async_start_polling called - starting door log poller + backfill task")
         self.door_log_poller: DoorLogPoller = DoorLogPoller(
             hass=self.hass,
             poll_function=self.async_retrieve_personal_door_log)
         await self.door_log_poller.async_start()
         self._backfill_task = asyncio.create_task(self.async_backfill_door_log_entries())
+        LOGGER.warning("✅ Poller started + backfill task created (%s)", self._backfill_task)
 
     async def async_stop_polling(self):
         """Stop polling the personal door log API."""
@@ -468,26 +470,27 @@ class AkuvoxApiClient:
         timeout when the on-disk cache no longer matches the filenames).
         """
         try:
-            LOGGER.debug("🚪 Backfilling door log history...")
+            LOGGER.warning("🚪 Backfilling door log history (background task)...")
             for page in range(1, 101):  # 1000 entries max / ~20 per page
                 json_data = await self.async_get_personal_door_log(page=page)
                 if json_data is None or len(json_data) == 0:
-                    LOGGER.debug("🚪 Backfill: no more data on page %s, stopping", page)
+                    LOGGER.warning("🚪 Backfill: no more data on page %s, stopping", page)
                     break
                 async with self._door_log_lock:
                     changed, entries = await self._data.async_merge_door_log_entries(json_data)
-                LOGGER.debug("🚪 Backfill page %s: got %s entries, total %s (changed=%s)",
-                             page, len(json_data), len(entries), changed)
+                LOGGER.warning("🚪 Backfill page %s: got %s entries, total %s (changed=%s)",
+                               page, len(json_data), len(entries), changed)
                 entries = await self._data.async_get_stored_data_for_key("door_log_entries") or []
                 if len(entries) >= 1000:
-                    LOGGER.debug("🚪 Backfill: reached 1000 entries, stopping")
+                    LOGGER.warning("🚪 Backfill: reached 1000 entries, stopping")
                     break
                 if len(json_data) < 20:
-                    LOGGER.debug("🚪 Backfill: short page (%s entries), stopping", len(json_data))
+                    LOGGER.warning("🚪 Backfill: short page (%s entries), stopping", len(json_data))
                     break
                 await asyncio.sleep(0.5)
             self.hass.bus.async_fire("akuvox_door_log_updated")
-            LOGGER.debug("🚪 Backfill done")
+            LOGGER.warning("🚪 Backfill done - %s entries stored",
+                           len(await self._data.async_get_stored_data_for_key("door_log_entries") or []))
         except Exception as error:  # pylint: disable=broad-except
             LOGGER.error("❌ Error backfilling door log entries: %s", error)
 
@@ -537,6 +540,9 @@ class AkuvoxApiClient:
                     for entry in entries)
                 if not changed and not needs_download:
                     return
+                total = len(entries)
+                have_img = sum(1 for e in entries if e.get("local_pic_url"))
+                empty_pic = sum(1 for e in entries if not e.get("pic_url"))
                 attempted = False
                 downloaded = 0
                 for entry in entries:
@@ -555,6 +561,8 @@ class AkuvoxApiClient:
                         downloaded += 1
                 if attempted:
                     await self._data.async_set_stored_data_for_key("door_log_entries", entries)
+                    LOGGER.warning("🖼️ Door log: total=%s images=%s empty_pic_url=%s downloaded_this_cycle=%s",
+                                   total, have_img, empty_pic, downloaded)
             if changed or attempted:
                 self.hass.bus.async_fire("akuvox_door_log_updated")
         except Exception as error:  # pylint: disable=broad-except
