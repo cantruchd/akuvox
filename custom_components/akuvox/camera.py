@@ -4,6 +4,7 @@ from collections.abc import Callable, Awaitable
 
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_registry import async_get as entity_registry_async_get
 from homeassistant.components.camera import Camera
 from homeassistant.const import ATTR_IDENTIFIERS, CONF_NAME, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant
@@ -251,4 +252,33 @@ class AkuvoxDoorLogCameraManager:
                 new_entities.append(camera)
         if new_entities:
             self.async_add_devices(new_entities)
+        await self._remove_stale_registry_entities()
+
+    async def _remove_stale_registry_entities(self):
+        """Remove orphaned door log camera entities from the entity registry.
+
+        Entity unique_ids changed in v1.0.66 from "Door Log Camera {time}"
+        to "Door Log Camera {time}|{mac}|{location}". Only entities still
+        using the OLD format (no '|') are removed — they are definitively
+        stale. New-format entities are left untouched even if their entry is
+        temporarily missing, to avoid deleting valid entities while the
+        background backfill is still merging entries.
+        """
+        try:
+            ent_reg = entity_registry_async_get(self.hass)
+            removed = 0
+            for entity_id, entry in list(ent_reg.entities.items()):
+                uid = entry.unique_id or ""
+                if not uid.startswith("Door Log Camera "):
+                    continue
+                key = uid.replace("Door Log Camera ", "", 1)
+                if "|" in key:
+                    continue
+                ent_reg.async_remove(entity_id)
+                removed += 1
+            if removed:
+                LOGGER.debug("🧹 Removed %s stale door log camera entit(ies) from registry", removed)
+        except Exception as error:  # pylint: disable=broad-except
+            LOGGER.error("❌ Error removing stale door log cameras: %s", error)
+        await self._remove_stale_registry_entities()
 
