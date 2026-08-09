@@ -447,7 +447,12 @@ class AkuvoxApiClient:
         await self.async_start_polling()
 
     async def async_backfill_door_log_entries(self):
-        """Page through the door log API to backfill history (up to 1000 entries)."""
+        """Page through the door log API to backfill history (up to 1000 entries).
+
+        Merge-only: screenshots are downloaded in the background by the
+        poller so the config entry setup is not blocked (avoids bootstrap
+        timeout when the on-disk cache no longer matches the filenames).
+        """
         try:
             LOGGER.debug("🚪 Backfilling door log history...")
             for page in range(1, 101):  # 1000 entries max / ~20 per page
@@ -458,7 +463,6 @@ class AkuvoxApiClient:
                 changed, entries = await self._data.async_merge_door_log_entries(json_data)
                 LOGGER.debug("🚪 Backfill page %s: got %s entries, total %s (changed=%s)",
                              page, len(json_data), len(entries), changed)
-                await self.async_update_door_log_data(json_data)
                 entries = await self._data.async_get_stored_data_for_key("door_log_entries") or []
                 if len(entries) >= 1000:
                     LOGGER.debug("🚪 Backfill: reached 1000 entries, stopping")
@@ -467,6 +471,7 @@ class AkuvoxApiClient:
                     LOGGER.debug("🚪 Backfill: short page (%s entries), stopping", len(json_data))
                     break
                 await asyncio.sleep(0.5)
+            self.hass.bus.async_fire("akuvox_door_log_updated")
             LOGGER.debug("🚪 Backfill done")
         except Exception as error:  # pylint: disable=broad-except
             LOGGER.error("❌ Error backfilling door log entries: %s", error)
@@ -517,17 +522,21 @@ class AkuvoxApiClient:
             if not changed and not needs_download:
                 return
             attempted = False
+            downloaded = 0
             for entry in entries:
                 if entry.get("local_pic_url") or not entry.get("pic_url"):
                     continue
                 if entry.get("ss_attempts", 0) >= 5:
                     continue
+                if downloaded >= 10:
+                    break
                 attempted = True
                 local_pic_url = await self.async_download_door_screenshot(
                     entry["pic_url"], entry["capture_time"], entry.get("location", ""))
                 entry["ss_attempts"] = entry.get("ss_attempts", 0) + 1
                 if local_pic_url:
                     entry["local_pic_url"] = local_pic_url
+                    downloaded += 1
             if attempted:
                 await self._data.async_set_stored_data_for_key("door_log_entries", entries)
             if changed or attempted:
