@@ -205,7 +205,6 @@ class AkuvoxDoorLogCameraManager:
         """Initialize the door log entry camera manager."""
         self.hass = hass
         self.async_add_devices = async_add_devices
-        self._store = storage.Store(hass, 1, DATA_STORAGE_KEY)
         self.entities: dict = {}
 
     async def initialize(self):
@@ -228,7 +227,10 @@ class AkuvoxDoorLogCameraManager:
 
     async def async_sync_cameras(self):
         """Create/update entry cameras from the stored door log list."""
-        stored_data: dict = await self._store.async_load() # type: ignore
+        # Fresh Store instance every sync: HA's storage.Store caches data in
+        # memory after the first load, so reusing self._store would never see
+        # new entries written by the poller/data.py.
+        stored_data: dict = await storage.Store(self.hass, 1, DATA_STORAGE_KEY).async_load() # type: ignore
         entries = []
         if stored_data:
             entries = [entry for entry in stored_data.get("door_log_entries", [])
