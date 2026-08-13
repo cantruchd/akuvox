@@ -118,11 +118,33 @@ class AkuvoxDoorLogEntryCamera(Camera):
             manufacturer=NAME,
         )
 
+    @staticmethod
+    def _resolve_location_name(hass: HomeAssistant, location: str) -> str:
+        """Return the HA-renamed location name if the entity was renamed.
+
+        The main RTSP cameras set `_attr_unique_id = <location>` (the raw Akuvox
+        location string), so the entity registry entry for that camera carries
+        the user-renamed friendly name. Door log cameras use that friendly name
+        when available and fall back to the raw location string.
+        """
+        if not location:
+            return location
+        try:
+            ent_reg = entity_registry_async_get(hass)
+            for entity in ent_reg.entities.values():
+                if entity.platform != DOMAIN or entity.domain != "camera":
+                    continue
+                if entity.unique_id == location:
+                    return entity.name or entity.original_name or location
+        except Exception as error:  # pylint: disable=broad-except
+            LOGGER.debug("Unable to resolve renamed location '%s': %s", location, error)
+        return location
+
     def _build_name(self) -> str:
         """Name with zero-padded rank (newest first) + full entry info."""
         entry = self._log_entry
         capture_time = entry.get("capture_time") or "?"
-        location = entry.get("location") or "?"
+        location = self._resolve_location_name(self.hass, entry.get("location") or "?")
         initiator = entry.get("initiator") or "?"
         unlock = self._format_unlock_method(entry.get("capture_type") or "")
         return (f"Door Log {self._rank:03d} | {capture_time} | {location} | "
@@ -138,7 +160,7 @@ class AkuvoxDoorLogEntryCamera(Camera):
     def state(self):
         """Return date/time, door, initiator and unlock method as the state."""
         capture_time = self._log_entry.get("capture_time") or "?"
-        location = self._log_entry.get("location") or "?"
+        location = self._resolve_location_name(self.hass, self._log_entry.get("location") or "?")
         initiator = self._log_entry.get("initiator") or "?"
         unlock = self._format_unlock_method(self._log_entry.get("capture_type") or "")
         return f"{capture_time} | {location} | {initiator} | {unlock}"
@@ -148,7 +170,7 @@ class AkuvoxDoorLogEntryCamera(Camera):
         """Expose each field as its own attribute so HA shows them on separate rows."""
         return {
             "time": self._log_entry.get("capture_time") or "",
-            "door": self._log_entry.get("location") or "",
+            "door": self._resolve_location_name(self.hass, self._log_entry.get("location") or ""),
             "initiator": self._log_entry.get("initiator") or "",
             "unlock_method": self._format_unlock_method(self._log_entry.get("capture_type") or ""),
         }
