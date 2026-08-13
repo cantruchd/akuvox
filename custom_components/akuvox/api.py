@@ -522,6 +522,22 @@ class AkuvoxApiClient:
                 LOGGER.error("❌ Door log polling error: %s", error)
             await asyncio.sleep(2)  # Wait for 2 seconds before calling again
 
+    def _entry_needs_download(self, entry) -> bool:
+        """True when this door log entry has no usable local screenshot.
+
+        Re-downloads when the stored URL points to a file that no longer exists
+        on disk (e.g. the www/akuvox folder was cleared).
+        """
+        if not entry or not entry.get("pic_url"):
+            return False
+        if entry.get("ss_attempts", 0) >= 5:
+            return False
+        local_pic_url = entry.get("local_pic_url")
+        if not local_pic_url:
+            return True
+        rel = str(local_pic_url).replace("/local/", "www/", 1)
+        return not Path(self.hass.config.path(rel)).exists()
+
     async def async_update_door_log_data(self, json_data):
         """Merge door log entries into the stored list and download screenshots.
 
@@ -535,8 +551,7 @@ class AkuvoxApiClient:
             async with self._door_log_lock:
                 changed, entries = await self._data.async_merge_door_log_entries(json_data)
                 needs_download = any(
-                    entry.get("local_pic_url") == "" and entry.get("pic_url")
-                    and entry.get("ss_attempts", 0) < 5
+                    self._entry_needs_download(entry)
                     for entry in entries)
                 if not changed and not needs_download:
                     return
@@ -546,12 +561,12 @@ class AkuvoxApiClient:
                 attempted = False
                 downloaded = 0
                 for entry in entries:
-                    if entry.get("local_pic_url") or not entry.get("pic_url"):
-                        continue
                     if entry.get("ss_attempts", 0) >= 5:
                         continue
                     if downloaded >= 10:
                         break
+                    if not self._entry_needs_download(entry):
+                        continue
                     attempted = True
                     local_pic_url = await self.async_download_door_screenshot(
                         entry["pic_url"], entry["capture_time"], entry.get("location", ""),
