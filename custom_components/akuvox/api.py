@@ -782,6 +782,21 @@ class AkuvoxApiClient:
         text = str(value).strip()
         return text.replace("T", " ")[:19]
 
+    def _clean_call_name(self, value):
+        """Strip SIP-account prefix from a call participant name.
+
+        e.g. '0904 -> Piyush Kumar' -> 'Piyush Kumar'. Keeps everything after
+        the last '->'; falls back to the raw value when no separator is found.
+        """
+        if not value:
+            return ""
+        text = str(value).strip()
+        if "->" in text:
+            parts = [p.strip() for p in text.split("->") if p.strip()]
+            if parts:
+                return parts[-1]
+        return text
+
     def _normalize_call_log_response(self, json_data):
         """Normalize getCallLog API responses to a list of call log entries."""
         if json_data is None:
@@ -797,8 +812,8 @@ class AkuvoxApiClient:
             capture_time = self._format_call_time(entry.get("startTime", ""))
             if not capture_time:
                 continue
-            caller = entry.get("callerName") or entry.get("callerSipAccount") or ""
-            callee = entry.get("calleeName") or entry.get("calleeSipAccount") or ""
+            caller = self._clean_call_name(entry.get("callerName") or entry.get("callerSipAccount") or "")
+            callee = self._clean_call_name(entry.get("calleeName") or entry.get("calleeSipAccount") or "")
             is_callee = bool(entry.get("isCallee", False))
             normalized.append({
                 "capture_time": capture_time,

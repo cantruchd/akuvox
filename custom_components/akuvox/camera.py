@@ -140,6 +140,18 @@ class AkuvoxDoorLogEntryCamera(Camera):
             LOGGER.debug("Unable to resolve renamed location '%s': %s", location, error)
         return location
 
+    @staticmethod
+    def _clean_call_name(value):
+        """Strip SIP-account prefix from a call participant name."""
+        if not value:
+            return ""
+        text = str(value).strip()
+        if "->" in text:
+            parts = [p.strip() for p in text.split("->") if p.strip()]
+            if parts:
+                return parts[-1]
+        return text
+
     def _build_name(self) -> str:
         """Name with zero-padded rank (newest first) + full entry info."""
         entry = self._log_entry
@@ -147,9 +159,9 @@ class AkuvoxDoorLogEntryCamera(Camera):
         location = self._resolve_location_name(self.hass, entry.get("location") or "?")
         initiator = entry.get("initiator") or "?"
         if entry.get("entry_type") == "call":
-            receiver = entry.get("receiver") or "?"
+            receiver = self._clean_call_name(entry.get("receiver") or "?")
             return (f"Door Log {self._rank:03d} | {capture_time} | {location} | "
-                    f"📞 {initiator} → {receiver}")
+                    f"📞 {receiver}")
         unlock = self._format_unlock_method(entry.get("capture_type") or "")
         return (f"Door Log {self._rank:03d} | {capture_time} | {location} | "
                 f"{initiator} | {unlock}")
@@ -165,10 +177,10 @@ class AkuvoxDoorLogEntryCamera(Camera):
         """Return date/time, door, initiator and unlock method as the state."""
         capture_time = self._log_entry.get("capture_time") or "?"
         location = self._resolve_location_name(self.hass, self._log_entry.get("location") or "?")
-        initiator = self._log_entry.get("initiator") or "?"
         if self._log_entry.get("entry_type") == "call":
-            receiver = self._log_entry.get("receiver") or "?"
-            return f"{capture_time} | {location} | {initiator} → {receiver} | 📞 Call"
+            receiver = self._clean_call_name(self._log_entry.get("receiver") or "?")
+            return f"{capture_time} | {location} | {receiver} | 📞 Call"
+        initiator = self._log_entry.get("initiator") or "?"
         unlock = self._format_unlock_method(self._log_entry.get("capture_type") or "")
         return f"{capture_time} | {location} | {initiator} | {unlock}"
 
@@ -178,14 +190,15 @@ class AkuvoxDoorLogEntryCamera(Camera):
         attrs = {
             "time": self._log_entry.get("capture_time") or "",
             "door": self._resolve_location_name(self.hass, self._log_entry.get("location") or ""),
-            "initiator": self._log_entry.get("initiator") or "",
         }
         if self._log_entry.get("entry_type") == "call":
-            attrs["receiver"] = self._log_entry.get("receiver") or ""
+            attrs["initiator"] = self._log_entry.get("initiator") or ""
+            attrs["receiver"] = self._clean_call_name(self._log_entry.get("receiver") or "")
             attrs["unlock_method"] = "Call"
             attrs["is_answer"] = bool(self._log_entry.get("is_answer", False))
             attrs["is_read"] = bool(self._log_entry.get("is_read", False))
         else:
+            attrs["initiator"] = self._log_entry.get("initiator") or ""
             attrs["unlock_method"] = self._format_unlock_method(
                 self._log_entry.get("capture_type") or "")
         return attrs
