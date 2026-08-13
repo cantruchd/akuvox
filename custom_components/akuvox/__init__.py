@@ -54,14 +54,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     await async_update_configuration(hass=hass, entry=entry)
 
-    # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
-    await coordinator.async_config_entry_first_refresh()
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    # Register the webhook BEFORE any API call: the token-sync endpoint must
+    # stay alive even if the stored token is invalid/unreachable.
     wb.async_register(
         hass, DOMAIN, "Akuvox token sync", WEBHOOK_ID, async_akuvox_token_webhook
     )
+
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        LOGGER.error("[SETUP] Initial refresh failed; webhook stays registered")
+
+    # https://docs.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True
 
