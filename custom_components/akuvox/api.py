@@ -6,6 +6,7 @@ import socket
 import json
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -37,6 +38,7 @@ from .const import (
     API_GET_PERSONAL_DOOR_LOG,
     API_V4_HOST,
     API_V4_GET_PERSONAL_DOOR_LOG,
+    API_V4_GET_PERSONAL_CALL_LOG,
     CAPTURE_TIME_KEY,
     PIC_URL_KEY
 )
@@ -488,6 +490,20 @@ class AkuvoxApiClient:
                     LOGGER.warning("🚪 Backfill: short page (%s entries), stopping", len(json_data))
                     break
                 await asyncio.sleep(0.5)
+            LOGGER.warning("📞 Backfilling call history (background task)...")
+            for page in range(1, 51):  # 1000 call entries max / ~20 per page
+                call_data = await self.async_get_personal_call_log(page=page)
+                if call_data is None or len(call_data) == 0:
+                    LOGGER.warning("📞 Call backfill: no more data on page %s, stopping", page)
+                    break
+                async with self._door_log_lock:
+                    changed, entries = await self._data.async_merge_call_log_entries(call_data)
+                LOGGER.warning("📞 Call backfill page %s: got %s entries, total %s (changed=%s)",
+                               page, len(call_data), len(entries), changed)
+                if len(call_data) < 20:
+                    LOGGER.warning("📞 Call backfill: short page (%s entries), stopping", len(call_data))
+                    break
+                await asyncio.sleep(0.5)
             self.hass.bus.async_fire("akuvox_door_log_updated")
             LOGGER.warning("🚪 Backfill done - %s entries stored",
                            len(await self._data.async_get_stored_data_for_key("door_log_entries") or []))
@@ -496,6 +512,7 @@ class AkuvoxApiClient:
 
     async def async_retrieve_personal_door_log(self) -> bool:
         """Request and parse the user's door log every 2 seconds."""
+        call_log_cycle = 0
         while True:
             try:
                 # Get the latest pesonal door log
@@ -518,6 +535,19 @@ class AkuvoxApiClient:
                             if entries[0].get("local_pic_url"):
                                 new_door_log["LocalPicUrl"] = entries[0]["local_pic_url"]
                         self.hass.bus.async_fire(event_name, new_door_log)
+                # Merge call history periodically (every ~30s)
+                call_log_cycle += 1
+                if call_log_cycle >= 15:
+                    call_log_cycle = 0
+                    try:
+                        call_data = await self.async_get_personal_call_log()
+                        if call_data is not None:
+                            async with self._door_log_lock:
+                                changed, _entries = await self._data.async_merge_call_log_entries(call_data)
+                            if changed:
+                                self.hass.bus.async_fire("akuvox_door_log_updated")
+                    except Exception as error:  # pylint: disable=broad-except
+                        LOGGER.error("❌ Call log polling error: %s", error)
             except Exception as error:  # pylint: disable=broad-except
                 LOGGER.error("❌ Door log polling error: %s", error)
             await asyncio.sleep(2)  # Wait for 2 seconds before calling again
@@ -738,6 +768,89 @@ class AkuvoxApiClient:
                 "RoomNum": entry.get("roomNum", ""),
             })
         return normalized
+
+    def _format_call_time(self, value):
+        """Convert call log startTime (epoch s/ms or string) to 'YYYY-MM-DD HH:MM:SS'."""
+        if not value:
+            return ""
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            try:
+                ts = value / 1000 if value > 1e11 else value
+                return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+            except (ValueError, OSError, OverflowError):
+                return str(value)
+        text = str(value).strip()
+        return text.replace("T", " ")[:19]
+
+    def _normalize_call_log_response(self, json_data):
+        """Normalize getCallLog API responses to a list of call log entries."""
+        if json_data is None:
+            return None
+        if isinstance(json_data, dict):
+            json_data = json_data.get("list", [])
+        if not isinstance(json_data, list):
+            return json_data
+        normalized = []
+        for entry in json_data:
+            if not isinstance(entry, dict):
+                continue
+            capture_time = self._format_call_time(entry.get("startTime", ""))
+            if not capture_time:
+                continue
+            caller = entry.get("callerName") or entry.get("callerSipAccount") or ""
+            callee = entry.get("calleeName") or entry.get("calleeSipAccount") or ""
+            is_callee = bool(entry.get("isCallee", False))
+            normalized.append({
+                "capture_time": capture_time,
+                "location": caller if is_callee else callee,
+                "initiator": caller,
+                "receiver": callee,
+                "is_answer": bool(entry.get("isAnswer", False)),
+                "is_callee": is_callee,
+                "is_read": bool(entry.get("isRead", False)),
+                "is_group_call": bool(entry.get("isGroupCall", False)),
+            })
+        return normalized
+
+    async def async_get_personal_call_log(self, page: int = 1):
+        """Request the personal call history log data."""
+        app_type = self._data.app_type or "single"
+        ts = int(time.time() * 1000)
+        path = API_V4_GET_PERSONAL_CALL_LOG.replace("single/", f"{app_type}/")
+        path = path.replace("page=1", f"page={page}")
+        url = f"https://{API_V4_HOST}{path}&_t={ts}"
+        self._log_api("async_get_personal_call_log", self._data.token, url)
+        data = {}
+        subdomain = self._data.subdomain
+        headers = {
+            "x-cloud-version": "6.4",
+            "accept": "application/json, text/plain, */*",
+            "sec-fetch-site": "same-site",
+            "accept-language": "en-GB,en;q=0.9",
+            "sec-fetch-mode": "cors",
+            "x-cloud-lang": "en",
+            "origin": f"https://{subdomain}.akuvox.com",
+            "x-requested-with": "com.akuvox.mobile.smartplus",
+            "pragma": "no-cache",
+            "cache-control": "no-cache",
+            "user-agent": f"Mozilla/5.0 (Linux; Android 15; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/150.0.7871.181 Mobile Safari/537.36 SmartPlus/6.2",
+            "referer": f"https://{subdomain}.akuvox.com/",
+            "x-auth-token": self._data.token,
+            "sec-fetch-dest": "empty"
+        }
+
+        json_data = await self._async_api_wrapper(method="get",
+                                                  url=url,
+                                                  headers=headers,
+                                                  data=data)
+
+        if json_data is not None:
+            json_data = self._normalize_call_log_response(json_data)
+            if json_data is not None and len(json_data) > 0:
+                return json_data
+
+        LOGGER.debug("No call log entries found")
+        return None
 
     ###################
     # Request Methods #

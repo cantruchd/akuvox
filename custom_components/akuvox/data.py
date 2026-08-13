@@ -271,6 +271,60 @@ class AkuvoxData:
             await self.async_set_stored_data_for_key("door_log_entries", entries)
         return changed, entries
 
+    async def async_merge_call_log_entries(self, json_data: list):
+        """Merge call history entries into the stored door log list.
+
+        Returns (changed, entries) where entries is newest-first and capped at 1000.
+        """
+        entries = await self.async_get_stored_data_for_key("door_log_entries")
+        if entries is None:
+            entries = []
+        entries = [entry for entry in entries if isinstance(entry, dict)]
+        existing_keys = {
+            f"{entry.get('capture_time')}|{entry.get('mac')}|{entry.get('location')}|{entry.get('entry_type', 'door')}|{entry.get('receiver', '')}"
+            for entry in entries
+        }
+        changed = False
+        new_items = []
+        for call_json in json_data:
+            if not isinstance(call_json, dict):
+                continue
+            capture_time = call_json.get("capture_time", "")
+            if not capture_time:
+                continue
+            location = call_json.get("location", "")
+            receiver = call_json.get("receiver", "")
+            key = f"{capture_time}||{location}|call|{receiver}"
+            if key in existing_keys:
+                continue
+            new_items.append({
+                "capture_time": capture_time,
+                "location": location,
+                "initiator": call_json.get("initiator", ""),
+                "receiver": receiver,
+                "capture_type": "",
+                "relay": "",
+                "mac": "",
+                "building_name": "",
+                "room_num": "",
+                "pic_url": "",
+                "local_pic_url": "",
+                "ss_attempts": 0,
+                "entry_type": "call",
+                "is_answer": bool(call_json.get("is_answer", False)),
+                "is_callee": bool(call_json.get("is_callee", False)),
+                "is_read": bool(call_json.get("is_read", False)),
+                "is_group_call": bool(call_json.get("is_group_call", False)),
+            })
+            existing_keys.add(key)
+            changed = True
+        if changed:
+            entries = new_items + entries
+            entries.sort(key=lambda e: str(e.get("capture_time", "")), reverse=True)
+            del entries[1000:]
+            await self.async_set_stored_data_for_key("door_log_entries", entries)
+        return changed, entries
+
     ###################
 
     async def async_set_stored_data_for_key(self, key, value):

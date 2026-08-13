@@ -488,6 +488,7 @@ API_GET_PERSONAL_DOOR_LOG = "log/getDoorLog?row=1"
 
 API_V4_HOST = "backend.subdomain.akuvox.com/web-server/v4/smartplus/"
 API_V4_GET_PERSONAL_DOOR_LOG = "community/log/member/getDoorLog?row=20&page=1"
+API_V4_GET_PERSONAL_CALL_LOG = "community/log/member/getCallLog?row=20&page=1"
 
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
 

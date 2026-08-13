@@ -109,7 +109,7 @@ class AkuvoxDoorLogEntryCamera(Camera):
         self._attr_unique_id = (f"Door Log Camera {capture_time}|"
                                 f"{log_entry.get('mac', '')}|{log_entry.get('location', '')}")
         self._attr_name = self._build_name()
-        self._attr_icon = "mdi:door"
+        self._attr_icon = "mdi:phone" if log_entry.get("entry_type") == "call" else "mdi:door"
         self._attr_should_poll = False
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, "Door Log")},  # type: ignore
@@ -146,6 +146,10 @@ class AkuvoxDoorLogEntryCamera(Camera):
         capture_time = entry.get("capture_time") or "?"
         location = self._resolve_location_name(self.hass, entry.get("location") or "?")
         initiator = entry.get("initiator") or "?"
+        if entry.get("entry_type") == "call":
+            receiver = entry.get("receiver") or "?"
+            return (f"Door Log {self._rank:03d} | {capture_time} | {location} | "
+                    f"📞 {initiator} → {receiver}")
         unlock = self._format_unlock_method(entry.get("capture_type") or "")
         return (f"Door Log {self._rank:03d} | {capture_time} | {location} | "
                 f"{initiator} | {unlock}")
@@ -162,18 +166,29 @@ class AkuvoxDoorLogEntryCamera(Camera):
         capture_time = self._log_entry.get("capture_time") or "?"
         location = self._resolve_location_name(self.hass, self._log_entry.get("location") or "?")
         initiator = self._log_entry.get("initiator") or "?"
+        if self._log_entry.get("entry_type") == "call":
+            receiver = self._log_entry.get("receiver") or "?"
+            return f"{capture_time} | {location} | {initiator} → {receiver} | 📞 Call"
         unlock = self._format_unlock_method(self._log_entry.get("capture_type") or "")
         return f"{capture_time} | {location} | {initiator} | {unlock}"
 
     @property
     def extra_state_attributes(self) -> dict:
         """Expose each field as its own attribute so HA shows them on separate rows."""
-        return {
+        attrs = {
             "time": self._log_entry.get("capture_time") or "",
             "door": self._resolve_location_name(self.hass, self._log_entry.get("location") or ""),
             "initiator": self._log_entry.get("initiator") or "",
-            "unlock_method": self._format_unlock_method(self._log_entry.get("capture_type") or ""),
         }
+        if self._log_entry.get("entry_type") == "call":
+            attrs["receiver"] = self._log_entry.get("receiver") or ""
+            attrs["unlock_method"] = "Call"
+            attrs["is_answer"] = bool(self._log_entry.get("is_answer", False))
+            attrs["is_read"] = bool(self._log_entry.get("is_read", False))
+        else:
+            attrs["unlock_method"] = self._format_unlock_method(
+                self._log_entry.get("capture_type") or "")
+        return attrs
 
     @staticmethod
     def _format_unlock_method(capture_type: str) -> str:
