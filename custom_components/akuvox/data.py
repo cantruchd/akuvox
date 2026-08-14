@@ -296,6 +296,13 @@ class AkuvoxData:
             receiver = call_json.get("receiver", "")
             key = f"{capture_time}||{location}|call|{receiver}"
             if key in existing_keys:
+                for entry in entries:
+                    if (entry.get("capture_time") == capture_time and
+                            entry.get("entry_type") == "call"):
+                        if not entry.get("pic_url") and call_json.get("pic_url", ""):
+                            entry["pic_url"] = call_json.get("pic_url", "")
+                            entry["ss_attempts"] = 0
+                            changed = True
                 continue
             new_items.append({
                 "capture_time": capture_time,
@@ -307,7 +314,7 @@ class AkuvoxData:
                 "mac": "",
                 "building_name": "",
                 "room_num": "",
-                "pic_url": "",
+                "pic_url": call_json.get("pic_url", ""),
                 "local_pic_url": "",
                 "ss_attempts": 0,
                 "entry_type": "call",

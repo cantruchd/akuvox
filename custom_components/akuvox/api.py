@@ -587,7 +587,8 @@ class AkuvoxApiClient:
                     return
                 total = len(entries)
                 have_img = sum(1 for e in entries if e.get("local_pic_url"))
-                empty_pic = sum(1 for e in entries if not e.get("pic_url"))
+                call_count = sum(1 for e in entries if e.get("entry_type") == "call")
+                empty_pic = sum(1 for e in entries if e.get("entry_type") != "call" and not e.get("pic_url"))
                 attempted = False
                 downloaded = 0
                 for entry in entries:
@@ -598,31 +599,33 @@ class AkuvoxApiClient:
                     if not self._entry_needs_download(entry):
                         continue
                     attempted = True
+                    prefix = "call" if entry.get("entry_type") == "call" else "door"
                     local_pic_url = await self.async_download_door_screenshot(
                         entry["pic_url"], entry["capture_time"], entry.get("location", ""),
-                        entry.get("mac", ""))
+                        entry.get("mac", ""), prefix)
                     entry["ss_attempts"] = entry.get("ss_attempts", 0) + 1
                     if local_pic_url:
                         entry["local_pic_url"] = local_pic_url
                         downloaded += 1
                 if attempted:
                     await self._data.async_set_stored_data_for_key("door_log_entries", entries)
-                    LOGGER.warning("🖼️ Door log: total=%s images=%s empty_pic_url=%s downloaded_this_cycle=%s",
-                                   total, have_img, empty_pic, downloaded)
+                    LOGGER.warning("🖼️ Door log: total=%s images=%s empty_pic_url=%s calls=%s downloaded_this_cycle=%s",
+                                   total, have_img, empty_pic, call_count, downloaded)
             if changed or attempted:
                 self.hass.bus.async_fire("akuvox_door_log_updated")
         except Exception as error:  # pylint: disable=broad-except
             LOGGER.error("❌ Error updating door log data: %s", error)
 
     async def async_download_door_screenshot(self, pic_url: str, capture_time: str,
-                                             location: str = "", mac: str = "") -> str | None:
+                                             location: str = "", mac: str = "",
+                                             prefix: str = "door") -> str | None:
         """Download door log screenshot to www/akuvox and return local URL.
 
         Screenshots older than 30 days are automatically deleted to avoid
         filling up the disk.
         """
         www_dir = Path(self.hass.config.path("www", "akuvox"))
-        filename = self._get_screenshot_filename(capture_time, pic_url, location, mac)
+        filename = self._get_screenshot_filename(capture_time, pic_url, location, mac, prefix)
         local_path = www_dir / filename
         if local_path.exists():
             LOGGER.debug("✅ Door screenshot already exists: %s", filename)
@@ -654,7 +657,8 @@ class AkuvoxApiClient:
         return None
 
     def _get_screenshot_filename(self, capture_time: str, pic_url: str,
-                                 location: str = "", mac: str = "") -> str:
+                                 location: str = "", mac: str = "",
+                                 prefix: str = "door") -> str:
         """Build a safe filename from capture time and source URL extension."""
         safe_time = re.sub(r"\D", "", str(capture_time))
         safe_loc = re.sub(r"\W+", "_", str(location))[:40]
@@ -665,7 +669,7 @@ class AkuvoxApiClient:
         extension = Path(urlparse(pic_url).path).suffix.lower()
         if extension not in (".jpg", ".jpeg", ".png", ".webp"):
             extension = ".jpg"
-        return f"door_{safe_time}{suffix}{extension}"
+        return f"{prefix}_{safe_time}{suffix}{extension}"
 
     def _save_screenshot_and_cleanup(self, local_path: Path, content: bytes):
         """Write screenshot to disk and remove screenshots older than 30 days."""
@@ -820,6 +824,7 @@ class AkuvoxApiClient:
                 "location": caller if is_callee else callee,
                 "initiator": caller,
                 "receiver": callee,
+                "pic_url": entry.get("picUrl", ""),
                 "is_answer": bool(entry.get("isAnswer", False)),
                 "is_callee": is_callee,
                 "is_read": bool(entry.get("isRead", False)),
